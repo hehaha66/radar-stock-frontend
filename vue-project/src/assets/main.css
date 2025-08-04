@@ -1,0 +1,9 @@
+/* src/assets/main.css */
+@import './base.css';
+@import 'element-plus/theme-chalk/dark/css-vars.css';
+
+#app {
+  width: 100%;
+  margin: 0 auto;
+  font-weight: normal;
+}
