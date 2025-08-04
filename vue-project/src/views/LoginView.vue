@@ -23,7 +23,7 @@ const handleLogin = async () => {
 
   try {
     const success = await userStore.login({
-      username: email.value,
+      email: email.value,
       password: password.value,
     });
 
