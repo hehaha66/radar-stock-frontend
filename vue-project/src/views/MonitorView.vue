@@ -37,7 +37,7 @@ const startMonitoring = () => {
 
   stopMonitoring(); // 先停止之前的连接
 
-  const url = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/monitor/sse/market-data?codes=${encodeURIComponent(codes.value)}&interval=${interval.value}&token=${userStore.token}`;
+  const url = `/api/monitor/sse/market-data?codes=${encodeURIComponent(codes.value)}&interval=${interval.value}&token=${userStore.apiToken}`;
   
   eventSource.value = new EventSource(url);
   isMonitoring.value = true;

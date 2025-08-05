@@ -1,96 +1,58 @@
-// src/stores/user.ts
+// 文件: src/stores/user.ts
+
 import { defineStore } from 'pinia';
-import * as api from '@/api/auth';
-import type { UserInfo, LoginFormData } from '@/types/user';
+import { ref, computed } from 'vue';
+import { login as loginApi, getMe as getMeApi } from '@/api/auth';
+import type { LoginFormData, UserInfo, LoginResponse } from '@/types/user';
 
-export type { UserInfo };
+export const useUserStore = defineStore('user', () => {
+  const token = ref<string | null>(localStorage.getItem('user_token'));
+  const userInfo = ref<UserInfo | null>(null);
 
-interface UserState {
-  accessToken: string | null;
-  userInfo: UserInfo | null;
-}
+  const isLoggedIn = computed(() => !!token.value && !!userInfo.value);
+  const apiToken = computed(() => userInfo.value?.api_token);
 
-/**
- * Manages user authentication and state.
- * Persisted to localStorage via pinia-plugin-persistedstate.
- */
-export const useUserStore = defineStore('user', {
-  state: (): UserState => ({
-    accessToken: null,
-    userInfo: null,
-  }),
+  function setLoginInfo(data: LoginResponse) {
+    token.value = data.access_token;
+    userInfo.value = data.user_info;
+    localStorage.setItem('user_token', data.access_token);
+  }
 
-  getters: {
-    /**
-     * Checks if the user is currently logged in.
-     * @returns {boolean} True if both token and userInfo exist.
-     */
-    isLoggedIn: (state): boolean => !!state.accessToken && !!state.userInfo,
+  function clearLoginInfo() {
+    token.value = null;
+    userInfo.value = null;
+    localStorage.removeItem('user_token');
+  }
 
-    /**
-     * Unified token getter.
-     * @returns {string | null} The user's authentication token.
-     */
-    token: (state): string | null => state.accessToken,
-  },
+  async function login(loginData: LoginFormData) {
+    const response = await loginApi(loginData);
+    setLoginInfo(response);
+  }
 
-  actions: {
-    /**
-     * Logs the user in by calling the API and storing the token and user info.
-     * @param loginData The user's login credentials.
-     * @returns {Promise<boolean>} True if login was successful.
-     */
-    async login(loginData: LoginFormData): Promise<boolean> {
+  function logout() {
+    clearLoginInfo();
+    // 路由跳转在组件中处理
+  }
+
+  // --- 关键新增/修改点 ---
+  async function tryAutoLogin() {
+    // 只有在有 token 但没有用户信息时才执行
+    if (token.value && !userInfo.value) {
       try {
-        const response = await api.login(loginData);
-        this.accessToken = response.access_token;
-        this.userInfo = response.user_info;
-        return true;
+        const user = await getMeApi();
+        // 如果成功获取，说明 token 有效，更新用户信息
+        userInfo.value = user;
       } catch (error) {
-        console.error('Login failed:', error);
-        this.logout(); // Ensure state is cleared on failure
-        return false;
+        // 如果失败 (例如 401)，说明 token 已过期，清理状态
+        console.warn("Auto login with stored token failed.", error);
+        clearLoginInfo();
       }
-    },
+    }
+  }
 
-    /**
-     * Fetches the current user's info from the API if a token exists.
-     */
-    async getMe() {
-      if (!this.accessToken) {
-        return;
-      }
-      try {
-        const userInfo = await api.getMe();
-        this.userInfo = userInfo;
-      } catch (error) {
-        console.error('Failed to fetch user info:', error);
-        // If the token is invalid or expired, log the user out.
-        this.logout();
-      }
-    },
-
-    /**
-     * Logs the user out by clearing the state.
-     */
-    logout() {
-      this.accessToken = null;
-      this.userInfo = null;
-      // The persisted state in localStorage will be cleared automatically.
-    },
-
-    /**
-     * Sets the user info directly (for profile updates, etc.).
-     */
-    setUserInfo(userInfo: UserInfo) {
-      this.userInfo = userInfo;
-    },
-  },
-
-  persist: {
-    key: 'user-storage',
-    // Only persist the accessToken. userInfo can be fetched again via getMe.
-    // This prevents storing stale user data.
-    paths: ['accessToken'], 
-  },
+  function updateUserInfo(newUserInfo: UserInfo) {
+    userInfo.value = newUserInfo;
+  }
+  
+  return { token, userInfo, isLoggedIn, apiToken, login, logout, tryAutoLogin, updateUserInfo };
 });

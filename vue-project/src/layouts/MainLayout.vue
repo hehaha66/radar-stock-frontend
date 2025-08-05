@@ -15,7 +15,7 @@
             <RouterLink to="/api-docs" class="nav-link">API文档</RouterLink>
             <RouterLink to="/about" class="nav-link">关于</RouterLink>
           </div>
-          
+
           <div class="user-auth-section">
             <div v-if="!userStore.isLoggedIn" class="auth-buttons">
               <RouterLink to="/login" class="auth-btn login-btn">
@@ -27,7 +27,7 @@
                 注册
               </RouterLink>
             </div>
-            
+
             <div v-else class="user-menu">
               <el-dropdown trigger="click" @command="handleUserCommand">
                 <div class="user-info">
@@ -63,7 +63,7 @@
         <el-icon><CaretTop /></el-icon>
       </button>
     </header>
-    
+
     <main class="main-content">
       <RouterView v-slot="{ Component }">
         <transition name="fade" mode="out-in">
@@ -79,10 +79,10 @@ import { ref, computed, provide, readonly } from 'vue';
 import { RouterLink, RouterView, useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { 
-  User, 
-  UserFilled, 
-  ArrowDown, 
+import {
+  User,
+  UserFilled,
+  ArrowDown,
   SwitchButton,
   Setting,
   CaretTop

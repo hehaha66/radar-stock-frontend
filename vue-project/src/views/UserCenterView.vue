@@ -72,7 +72,7 @@ const plansList = computed(() => {
 // --- API 调用与方法 (无修改) ---
 const fetchPlans = async () => { try { plansConfig.value = await service.get('/subscription/plans'); } catch (error) { console.error('获取套餐信息失败:', error); } };
 const copyApiToken = () => { 
-  const token = userStore.token;
+  const token = userStore.apiToken;
   if (token) { 
     navigator.clipboard.writeText(token); 
     ElMessage.success('API Token 已复制到剪贴板'); 
@@ -83,13 +83,8 @@ const copyApiToken = () => {
 const resetApiToken = async () => { 
   try { 
     await ElMessageBox.confirm('您确定要重置 API Token 吗？旧的 Token 将立即失效。', '确认操作', { type: 'warning' }); 
-    const updatedUserInfo: any = await service.post('/auth/me/reset-api-token'); 
-    userStore.setUserInfo(updatedUserInfo); 
-    // 更新本地存储的token
-    if (updatedUserInfo.token) {
-      localStorage.setItem('accessToken', updatedUserInfo.token);
-      userStore.accessToken = updatedUserInfo.token;
-    }
+    const updatedUserInfo: UserInfo = await service.post('/auth/me/reset-api-token'); 
+    userStore.updateUserInfo(updatedUserInfo); 
     ElMessage.success('API Token 重置成功！'); 
   } catch (error) { 
     if (error !== 'cancel') ElMessage.error('API Token 重置失败'); 
@@ -277,7 +272,7 @@ watch(user, (newUser) => {
                       <el-card shadow="never" class="content-card">
                       <template #header><h3>API Token</h3></template>
                       <p class="api-token-info">您的静态 API Token 用于外部程序调用。</p>
-                      <el-input :model-value="user.token" readonly>
+                      <el-input :model-value="userStore.apiToken" readonly>
                           <template #append>
                           <el-button :icon="CopyDocument" @click="copyApiToken" />
                           </template>

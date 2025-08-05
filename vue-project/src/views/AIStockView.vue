@@ -1,251 +1,313 @@
+<!-- 文件: src/views/AIStockView.vue (视觉与交互终极版) -->
+
 <template>
-  <div class="ai-stock-view" :class="{ 'started': hasStarted }">
+  <div class="ai-stock-view" :class="{ 'centered': !searchWasTriggered }">
     <div class="content-wrapper">
       <div class="controls-container">
-        <h1>AI分析 条件选股</h1>
-        <p class="description">{{ hasStarted ? ' ' : '输入您的选股条件，选择市场，即可获取实时获取分析结果。' }}</p>
+        <!-- 标题区域，只在初始状态显示 -->
+        <h1 v-if="!searchWasTriggered">AI分析 条件选股</h1>
+        <p class="description" v-if="!searchWasTriggered">输入您的选股条件，选择市场，即可获取实时分析结果。</p>
 
-        <div class="search-area">
-          <div class="robot-container">
-            <div class="robot-placeholder">🤖</div>
-            <div class="speech-bubble" v-if="bubbleMessage">
-              {{ bubbleMessage }}
+        <!-- 搜索控件 Wrapper -->
+        <div class="search-controls-wrapper" :class="{'loading': isLoading}">
+          <!-- 机器人和气泡现在是输入框的一部分 -->
+          <div class="robot-prefix-area">
+            <div class="robot-placeholder" @click="changeRobotTip()">🤖</div>
+            <div class="robot-bubble" :class="{ 'error': isErrorState }" v-if="robotTip">
+              {{ robotTip }}
             </div>
           </div>
-          <div class="controls">
-            <div class="input-wrapper">
-              <el-input
-                v-model="question"
-                placeholder=""
-                class="input-question"
-                clearable
-                :disabled="isLoading"
-                @keyup.enter="handleQuery"
-              />
-              <div class="scan-light"></div>
-            </div>
-            <el-radio-group v-model="secondaryIntent" class="market-selector" :disabled="isLoading">
-              <el-radio-button value="stock">A股</el-radio-button>
-              <el-radio-button value="hkstock">港股</el-radio-button>
-              <el-radio-button value="usstock">美股</el-radio-button>
-            </el-radio-group>
-            <el-button type="primary" @click="handleQuery" :loading="isLoading" class="query-btn">
-              {{ isLoading ? '查询中...' : '查询' }}
-            </el-button>
-            <el-button type="success" @click="handleDownload" :loading="isDownloading" :disabled="!tableData.length || isLoading" class="query-btn">
-              下载 Excel
-            </el-button>
+
+          <div class="input-wrapper">
+            <el-input
+              v-model="question"
+              class="main-search-input"
+              @keyup.enter="handleSearch"
+              :disabled="isLoading"
+              placeholder=""
+            />
+            <div class="scan-light"></div>
+          </div>
+
+          <el-radio-group v-model="secondaryIntent" :disabled="isLoading">
+            <el-radio-button value="stock">A股</el-radio-button>
+            <el-radio-button value="hkstock">港股</el-radio-button>
+            <el-radio-button value="usstock">美股</el-radio-button>
+          </el-radio-group>
+
+          <div class="action-buttons">
+            <el-button @click="handleSearch" :loading="isLoading" type="primary">开始分析</el-button>
+            <el-button @click="downloadExcel" :disabled="searchResults.length === 0" type="success">下载 Excel</el-button>
           </div>
         </div>
       </div>
 
-      <div v-if="hasStarted" class="results-container">
-        <el-skeleton :rows="10" animated v-if="isLoading && !tableData.length" />
-
-        <el-table
-          :data="paginatedData"
-          stripe
-          class="data-table"
-          v-if="tableData.length > 0"
-        >
-          <el-table-column v-for="col in columns" :key="col.prop" :prop="col.prop" :label="col.label" show-overflow-tooltip />
-        </el-table>
-
-        <el-empty
-          description=" "
-          v-if="!isLoading && tableData.length === 0"
-        />
-
-        <el-pagination
-          v-if="tableData.length > 0"
-          class="pagination"
-          @current-change="handlePageChange"
-          :current-page="currentPage"
-          :page-size="pageSize"
-          :total="tableData.length"
-          layout="total, prev, pager, next, jumper"
-        />
+      <!-- 结果区域 (保持不变) -->
+      <div v-if="searchWasTriggered" class="results-container">
+         <div v-if="isLoading" class="loading-container">
+          <el-skeleton :rows="5" animated />
+        </div>
+        <div v-else-if="searchResults.length > 0">
+          <div class="results-header">
+            <div class="results-summary">
+              共 {{ searchResults.length }} 条结果
+            </div>
+            <el-pagination
+              v-if="searchResults.length > pageSize"
+              background
+              small
+              layout="sizes, prev, pager, next"
+              :total="searchResults.length"
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[50, 100, 200]"
+            />
+          </div>
+          <el-table :data="paginatedResults" stripe style="width: 100%">
+             <el-table-column
+                v-for="col in columns"
+                :key="col.prop"
+                :prop="col.prop"
+                :label="col.label"
+                show-overflow-tooltip
+                />
+          </el-table>
+        </div>
+        <div v-else-if="!isLoading && !isErrorState">
+           <el-empty description="未能找到匹配结果" />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useUserStore } from '@/stores/user';
 import * as XLSX from 'xlsx';
 
+// --- 状态与常量 ---
 const userStore = useUserStore();
-
-const question = ref('');
+const question = ref(''); // 默认值为空字符串
 const secondaryIntent = ref('stock');
-const tableData = ref<any[]>([]);
-const columns = ref<{ prop: string; label: string; }[]>([]);
 const isLoading = ref(false);
-const isDownloading = ref(false);
+const searchResults = ref<any[]>([]);
+const columns = ref<{ prop: string; label: string; }[]>([]);
+const searchWasTriggered = ref(false);
 const currentPage = ref(1);
-const pageSize = 50;
-const hasStarted = ref(false);
-const bubbleMessage = ref('在右侧输入,例如：\n阳线, 成交量>10万, macd金叉');
+const pageSize = ref(100);
+const robotTip = ref('');
+let tipInterval: number | null = null;
+let tipTimeout: number | null = null;
+
+const TIPS = {
+  general: [
+    "我可以理解自然语言，试试输入“市盈率小于30，净资产收益率大于15%”...",
+    "支持A股、港股、美股市场切换哦。",
+    "查询结果支持一键导出为 Excel 文件。",
+    "点击我可以切换提示哦！"
+  ],
+  loading: "正在连接AI分析引擎，请稍候，数据即将呈现...",
+  success: (count: number) => `分析完成！共为您找到 ${count} 条结果。`,
+  no_result: "未能找到匹配结果，也许换个条件能发现新大陆？",
+  export_first: "请先查询并获取数据后，才能导出哦！",
+  unknown_error: "查询时发生未知错误，请检查网络或联系管理员。",
+  connection_error: "与服务器的连接中断或查询超时。"
+};
+
+// --- 计算属性 ---
+const searchError = ref(''); // 用于触发 isErrorState
+const hasSearched = computed(() => searchWasTriggered.value);
+const isErrorState = computed(() => !!searchError.value);
+const paginatedResults = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  const end = start + pageSize.value;
+  return searchResults.value.slice(start, end);
+});
+
+// --- 函数 ---
+const changeRobotTip = (message?: string | { type: 'success', count: number }) => {
+  if (tipTimeout) clearTimeout(tipTimeout);
+  if (tipInterval) clearInterval(tipInterval);
+
+  searchError.value = ''; // 默认清除错误状态
+
+  if (typeof message === 'string') {
+    robotTip.value = message;
+  } else if (typeof message === 'object' && message.type === 'success') {
+    robotTip.value = TIPS.success(message.count);
+  } else {
+    const currentIndex = TIPS.general.indexOf(robotTip.value);
+    const nextIndex = (currentIndex + 1) % TIPS.general.length;
+    robotTip.value = TIPS.general[nextIndex];
+    return;
+  }
+
+  tipTimeout = window.setTimeout(() => {
+    tipInterval = window.setInterval(() => changeRobotTip(), 7000);
+    changeRobotTip();
+  }, 10000);
+};
 
 let eventSource: EventSource | null = null;
+const closeEventSource = () => { if (eventSource) { eventSource.close(); eventSource = null; }};
 
-const paginatedData = computed(() => {
-  const start = (currentPage.value - 1) * pageSize;
-  const end = start + pageSize;
-  return tableData.value.slice(start, end);
-});
+const handleSearch = () => {
+  if (!question.value) { changeRobotTip("请输入查询条件再开始分析哦。"); return; }
 
-const formatDataChunk = (data: any[]) => data.map(row => {
-  const newRow = { ...row };
-  for (const key in newRow) {
-    if (typeof newRow[key] === 'number') newRow[key] = newRow[key].toFixed(2);
-  }
-  return newRow;
-});
-
-const closeEventSource = () => {
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-    isLoading.value = false;
-  }
-};
-
-const handleQuery = () => {
-  if (!userStore.token) {
-    bubbleMessage.value = '请先登录后再进行查询。';
-    return;
-  }
-  if (!question.value.trim()) {
-    bubbleMessage.value = '请输入查询条件。';
-    return;
-  }
-
-  hasStarted.value = true;
-  closeEventSource();
-  tableData.value = [];
-  columns.value = [];
   currentPage.value = 1;
+  searchResults.value = [];
+  columns.value = [];
   isLoading.value = true;
-  bubbleMessage.value = '正在连接服务器...';
+  searchWasTriggered.value = true;
+  changeRobotTip(TIPS.loading);
 
-  const encodedQuestion = encodeURIComponent(question.value);
-  const url = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/ai_stock/stream-query?question=${encodedQuestion}&secondary_intent=${secondaryIntent.value}&token=${userStore.token}`;
+  closeEventSource();
 
+  const apiToken = userStore.apiToken;
+  if (!apiToken) {
+    const msg = "无法获取 API Token，请重新登录。";
+    changeRobotTip(msg);
+    searchError.value = msg;
+    isLoading.value = false;
+    return;
+  }
+
+  const url = `/api/ai_stock/stream-query?question=${encodeURIComponent(question.value)}&secondary_intent=${encodeURIComponent(secondaryIntent.value)}&token=${apiToken}`;
   eventSource = new EventSource(url);
 
-  eventSource.onopen = () => {
-    bubbleMessage.value = '已连接，正在获取数据...';
+  eventSource.onmessage = (event) => {
+    try {
+      const dataChunk = JSON.parse(event.data);
+      if (Array.isArray(dataChunk) && dataChunk.length > 0) {
+        if (columns.value.length === 0) {
+          columns.value = Object.keys(dataChunk[0]).map(key => ({
+            prop: key,
+            label: key.includes('@') ? key.split('@')[1] : key,
+          }));
+        }
+        searchResults.value.push(...dataChunk);
+      }
+    } catch (e) { console.error('Error parsing SSE message data:', e); }
   };
 
-  eventSource.addEventListener('data', (event) => {
-    const dataChunk = JSON.parse(event.data);
-    if (Array.isArray(dataChunk) && dataChunk.length > 0) {
-      if (tableData.value.length === 0) {
-        columns.value = Object.keys(dataChunk[0]).map(key => {
-          const label = key.includes('@') ? key.split('@')[1] : key;
-          return { prop: key, label: label };
-        });
-      }
-
-      const formattedChunk = formatDataChunk(dataChunk);
-      tableData.value.push(...formattedChunk);
-      bubbleMessage.value = `已加载 ${tableData.value.length} 条数据...`;
-    }
-  });
-
-  eventSource.addEventListener('done', (event) => {
-    const { found } = JSON.parse(event.data);
-    if (found) {
-      bubbleMessage.value = `查询结束，共找到 ${tableData.value.length} 条数据。`;
-    } else if (tableData.value.length === 0) {
-      bubbleMessage.value = '未能找到匹配结果，请尝试更换条件。';
+  eventSource.addEventListener('done', () => {
+    isLoading.value = false;
+    closeEventSource();
+    if (searchResults.value.length > 0) {
+      changeRobotTip({ type: 'success', count: searchResults.value.length });
     } else {
-      bubbleMessage.value = '查询结束。';
+      changeRobotTip(TIPS.no_result);
+      searchError.value = TIPS.no_result;
     }
-    closeEventSource();
   });
 
-  eventSource.addEventListener('stream_error', (event) => {
-    const errorData = JSON.parse(event.data);
-    bubbleMessage.value = `查询失败: ${errorData.message}`;
+  eventSource.addEventListener('error', (event: MessageEvent) => {
+    isLoading.value = false;
     closeEventSource();
+    let msg = TIPS.unknown_error;
+    if (event.data) {
+        try {
+            const data = JSON.parse(event.data);
+            msg = data.message || TIPS.unknown_error;
+        } catch(e) { /* use default */ }
+    }
+    changeRobotTip(msg);
+    searchError.value = msg;
   });
 
-  eventSource.onerror = async () => {
-    // 当发生错误时，主动探测一下后端状态，以区分是网络问题还是429错误
-    try {
-      const probeUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/ai_stock/stream-query?question=${encodeURIComponent(question.value)}&secondary_intent=${secondaryIntent.value}&token=${userStore.token}`;
-      const response = await fetch(probeUrl, { method: 'HEAD' }); // 使用HEAD请求，更轻量
-      if (response.status === 429) {
-        bubbleMessage.value = '当前请求人数过多，请一分钟后再试。';
-      } else {
-        bubbleMessage.value = '当前请求人数过多，请一分钟后再试。';
-      }
-    } catch (e) {
-      bubbleMessage.value = '当前请求人数过多，请一分钟后再试。';
+  eventSource.onerror = () => {
+    if (isLoading.value) {
+        changeRobotTip(TIPS.connection_error);
+        searchError.value = TIPS.connection_error;
     }
+    isLoading.value = false;
     closeEventSource();
   };
 };
 
-const handleDownload = () => {
-  if (tableData.value.length === 0) {
-    bubbleMessage.value = '没有数据可供下载。';
+const downloadExcel = () => {
+  if (searchResults.value.length === 0) {
+    changeRobotTip(TIPS.export_first);
     return;
   }
-  isDownloading.value = true;
-  try {
-    const worksheet = XLSX.utils.json_to_sheet(tableData.value);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'AI选股结果');
-    const fileName = `ai_stock_results_${new Date().getTime()}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-    ElMessage.success('Excel 文件已开始下载！'); // 保留下载成功的全局提示
-  } catch (error) {
-    console.error('下载Excel失败:', error);
-    bubbleMessage.value = '下载失败，请稍后重试。';
-  } finally {
-    isDownloading.value = false;
-  }
+  const worksheet = XLSX.utils.json_to_sheet(searchResults.value);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'AI选股结果');
+  XLSX.writeFile(workbook, `ai_stock_results_${new Date().toISOString().slice(0,10)}.xlsx`);
 };
 
-const handlePageChange = (page: number) => { currentPage.value = page; };
-onBeforeUnmount(closeEventSource);
+onMounted(() => {
+  robotTip.value = TIPS.general[0];
+  tipInterval = window.setInterval(changeRobotTip, 7000);
+});
+
+onBeforeUnmount(() => {
+  if (tipInterval) clearInterval(tipInterval);
+  if (tipTimeout) clearTimeout(tipTimeout);
+  closeEventSource();
+});
 </script>
 
 <style scoped>
-/* 机器人和气泡样式 */
-.robot-container {
+/* 动画与动态布局 */
+.ai-stock-view {
+  padding: 2rem;
+  background-color: #0f172a;
+  transition: padding-top 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ai-stock-view.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 80px); /* 减去 Header 高度 */
+}
+.content-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; }
+.controls-container { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+.ai-stock-view:not(.centered) .controls-container { padding-bottom: 2rem; border-bottom: 1px solid #1e293b; }
+
+/* 标题 */
+h1 { font-size: 3.5rem; font-weight: 700; color: #f1f5f9; margin: 0; }
+.description { font-size: 1.125rem; color: #94a3b8; margin: 0; min-height: 27px; }
+
+/* 机器人和气泡 */
+.robot-prefix-area {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-left: -3rem; /* 将机器人移出 wrapper */
+  padding-right: 0.5rem;
+}
+.robot-placeholder {
+  font-size: 1.5rem;
+  cursor: pointer;
+  animation: robot-bob 2s infinite ease-in-out; /* 恢复跳动动画 */
+}
+@keyframes robot-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
-.speech-bubble {
+.robot-bubble {
   position: absolute;
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
+  margin-bottom: 25px; /* 增加与机器人的距离 */
   background-color: #1e293b;
-  color: #cbd5e1;
-  padding: 10px 15px;
-  border-radius: 15px;
   border: 1px solid #334155;
-  margin-bottom: 15px; /* 气泡和机器人之间的距离 */
+  color: #cbd5e1;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
   width: max-content;
-  max-width: 300px;
-  font-size: 0.875rem;
-  z-index: 20;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  white-space: pre-wrap; /* 让 \n 生效 */
+  max-width: 350px;
+  text-align: center;
+  line-height: 1.5;
+  opacity: 0;
+  animation: bubble-fade-in 0.5s 0.2s forwards;
+  pointer-events: none;
 }
-
-.speech-bubble::after {
+.robot-bubble::after { /* 气泡小尾巴 */
   content: '';
   position: absolute;
   top: 100%;
@@ -253,176 +315,64 @@ onBeforeUnmount(closeEventSource);
   transform: translateX(-50%);
   width: 0;
   height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-top: 10px solid #1e293b;
+  border-width: 8px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
 }
+@keyframes bubble-fade-in { to { opacity: 1; } }
 
-/* 机器人手电筒动画效果 */
-@keyframes scan {
-  0% { transform: translateX(-100%) skewX(-30deg); }
-  100% { transform: translateX(250%) skewX(-30deg); }
-}
+.robot-bubble.error { background-color: #372828; border-color: #7f1d1d; color: #fca5a5; }
+.robot-bubble.error::after { border-top-color: #372828; }
 
-.search-area {
+/* 超级输入框 Wrapper */
+.search-controls-wrapper {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 1rem; /* 在机器人和控件之间添加间隙 */
-}
-
-.robot-placeholder {
-  font-size: 2.5rem;
-  z-index: 10;
-  animation: robot-bob 2s infinite ease-in-out;
-  cursor: pointer;
-}
-
-@keyframes robot-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); } /* 调整浮动效果 */
-}
-
-.controls {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(30, 41, 59, 0.5);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  transition: all 0.3s ease-in-out;
   width: 100%;
-  max-width: 900px;
-}
-
-.input-wrapper {
-  flex-grow: 1;
+  max-width: 1000px;
   position: relative;
-  overflow: hidden; /* 隐藏超出范围的光束 */
-  border-radius: 6px;
+  margin-left: 2rem;
+  margin-top: 60px;
 }
+.search-controls-wrapper:focus-within { border-color: var(--el-color-primary); box-shadow: 0 0 0 1px var(--el-color-primary); }
 
-.input-question {
-  width: 100%;
-}
+/* Wrapper 内的控件 */
+.input-wrapper { flex-grow: 1; position: relative; overflow: hidden; }
+.main-search-input { height: 40px; }
+:deep(.main-search-input .el-input__wrapper) { background-color: transparent !important; box-shadow: none !important; border: none !important; padding: 0 !important; }
+:deep(.main-search-input .el-input__inner) { color: #f1f5f9 !important; font-size: 1rem; }
 
-.scan-light {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100px; /* 光束宽度 */
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  animation: scan 4s linear infinite;
-  pointer-events: none; /* 确保不影响鼠标操作 */
-}
+/* 扫描光效 */
+.scan-light { position: absolute; top: 0; left: 0; width: 80px; height: 100%; background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.3), transparent); animation: scan 4s linear infinite; pointer-events: none; }
+.search-controls-wrapper.loading .scan-light { animation-duration: 1.5s; }
+@keyframes scan { 0% { transform: translateX(-100%) skewX(-20deg); } 100% { transform: translateX(1200%) skewX(-20deg); } }
 
-/* 整体布局和视觉优化 */
-.ai-stock-view {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100vh - 80px);
-  padding: 2rem;
-  background-color: #0f172a;
-  transition: align-items 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ai-stock-view.started {
-  align-items: flex-start;
-}
-
-.content-wrapper {
-  width: 100%;
-  max-width: 1200px;
-  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.controls-container {
-  text-align: center;
-  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  width: 100%;
-}
-
-.ai-stock-view.started .controls-container {
-  text-align: left;
-}
-
-/* 字体和文案 */
-h1 {
-  font-size: 3.5rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  margin-bottom: 1rem;
-}
-
-.description {
-  font-size: 1.125rem;
-  color: #94a3b8;
-  margin-bottom: 3rem;
-}
-
-/* 控件样式 */
-:deep(.el-input__wrapper) {
-  background-color: #1e293b !important;
-  box-shadow: none !important;
-  border: 1px solid #334155 !important;
-  height: 40px;
-  font-size: 1rem;
-}
-:deep(.el-input__inner) {
-  color: #f1f5f9 !important;
-}
-
-:deep(.el-radio-button__inner) {
-  background-color: #1e293b !important;
-  border-color: #334155 !important;
-  color: #94a3b8 !important;
-  height: 40px;
-  line-height: 26px;
-  font-size: 1rem;
-}
-
-:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: #38bdf8 !important;
-  border-color: #38bdf8 !important;
-  color: #0f172a !important;
-  box-shadow: none !important;
-}
-
-.query-btn {
-  min-width: 100px;
-  height: 40px;
-  font-size: 1rem;
-}
+/* 按钮组 */
+.el-radio-group { display: inline-flex; }
+:deep(.el-radio-button__inner) { background-color: transparent !important; border-color: #334155 !important; color: #94a3b8 !important; height: 40px; line-height: 24px; }
+:deep(.el-radio-button:first-child .el-radio-button__inner) { border-left-color: #334155; }
+:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { background: var(--el-color-primary) !important; border-color: var(--el-color-primary) !important; color: #0f172a !important; box-shadow: -1px 0 0 0 var(--el-color-primary); }
+.action-buttons { display: flex; gap: 0.5rem; }
+.action-buttons .el-button { height: 40px; }
 
 /* 结果区域 */
-.results-container {
-  margin-top: 2rem;
-  opacity: 0;
-  transform: translateY(20px);
-  animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-@keyframes fadeIn {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 表格和分页 */
-.data-table { width: 100%; }
+.results-container { margin-top: 2rem; opacity: 0; animation: fadeIn 0.5s 0.3s ease-out forwards; }
+@keyframes fadeIn { to { opacity: 1; } }
+.results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.results-summary { color: #94a3b8; margin-right: auto; }
+.loading-container { width: 100%; }
 :deep(.el-table), :deep(.el-table__expanded-cell) { background-color: transparent !important; }
 :deep(.el-table th), :deep(.el-table tr) { background-color: transparent !important; color: #cbd5e1 !important; border-bottom: 1px solid #334155 !important; }
 :deep(.el-table td) { border-bottom: 1px solid #334155 !important; }
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) { background-color: #1a243b !important; }
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td) { background-color: #334155 !important; }
-:deep(.el-table__empty-block) { background-color: #1e293b !important; }
-.pagination { margin-top: 1.5rem; display: flex; justify-content: center; }
-:deep(.el-pagination button), :deep(.el-pager li) { background-color: transparent !important; color: #94a3b8 !important; }
-:deep(.el-pager li.is-active) { color: #38bdf8 !important; }
-:deep(.el-pagination .el-input__inner) { color: #f1f5f9 !important; }
-:deep(.el-pagination .el-input__wrapper){ background-color: #1e293b !important; box-shadow: none !important; border: 1px solid #334155 !important; }
+:deep(.el-pagination.is-background .el-pager li:not(.is-disabled):hover) { color: #38bdf8; }
+:deep(.el-pagination.is-background .el-pager li:not(.is-disabled).is-active) { background-color: #38bdf8; color: #0f172a; }
 </style>

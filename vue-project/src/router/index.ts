@@ -29,38 +29,35 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
-  const userStore = useUserStore()
+  const userStore = useUserStore();
 
-  // 关键修复：在每次导航前，如果 store 中没有用户信息但存在 token，
-  // 则尝试从后端获取用户信息。这确保了刷新页面后登录状态能够恢复。
-  if (localStorage.getItem('accessToken') && !userStore.isLoggedIn) {
-    await userStore.getMe();
-  }
+  // --- 关键修改点 ---
+  // 在判断登录状态前，先尝试自动登录
+  await userStore.tryAutoLogin();
+
+  const isLoggedIn = userStore.isLoggedIn;
+  const isAdmin = userStore.userInfo?.role === 'admin';
 
   // 检查管理员权限
   if (to.meta.requiresAdmin) {
-    if (userStore.isLoggedIn && userStore.userInfo?.role === 'admin') {
+    if (isLoggedIn && isAdmin) {
       next();
     } else {
       ElMessage.error('需要管理员权限！');
-      // 如果已登录但不是管理员，则跳到主页；否则跳到管理员登录页
-      next(userStore.isLoggedIn ? { name: 'home' } : { name: 'admin-login' });
-    }
-    return;
-  } 
-
-  // 检查普通用户权限
-  if (to.meta.requiresAuth) {
-    if (userStore.isLoggedIn) {
-      next();
-    } else {
-      ElMessage.warning('请先登录以访问该页面。');
-      next({ name: 'login', query: { redirect: to.fullPath } });
+      next(isLoggedIn ? { name: 'home' } : { name: 'admin-login' });
     }
     return;
   }
 
-  next();
-})
+  // 检查普通用户权限
+  if (to.meta.requiresAuth && !isLoggedIn) {
+    ElMessage.warning('请先登录以访问该页面。');
+    next({ name: 'login', query: { redirect: to.fullPath } });
+  } else if ((to.name === 'login' || to.name === 'register') && isLoggedIn) {
+    next({ name: 'home' });
+  } else {
+    next();
+  }
+});
 
 export default router

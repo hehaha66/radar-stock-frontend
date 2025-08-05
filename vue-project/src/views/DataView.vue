@@ -160,7 +160,7 @@ function initChartDateRange() {
 // 加载市场概览
 async function loadMarketOverview() {
   try {
-    const response = await fetch('http://127.0.0.1:8000/data/market-overview', {
+    const response = await fetch('/api/data/market-overview', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
       }
@@ -261,7 +261,7 @@ async function loadKlineData() {
     const endStr = endDate.toISOString().split('T')[0]
 
     const response = await fetch(
-      `http://127.0.0.1:8000/data/download-history?codes=${selectedStock.value.code}&start_date=${startStr}&end_date=${endStr}&period=${chartPeriod.value}&adjust=qfq`,
+      `/api/data/download-history?codes=${selectedStock.value.code}&start_date=${startStr}&end_date=${endStr}&period=${chartPeriod.value}&adjust=qfq`,
       {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
