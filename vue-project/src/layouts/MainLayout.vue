@@ -144,6 +144,13 @@ const handleUserCommand = async (command: string) => {
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.header-collapsed .header {
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
+  box-shadow: none;
+}
+
 .nav-content-wrapper {
   max-height: 60px; /* Adjust to your nav height */
   overflow: hidden;
