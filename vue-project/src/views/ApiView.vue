@@ -28,7 +28,7 @@
           <el-menu :default-active="activeView" @select="handleMenuSelect" class="api-menu">
             <el-sub-menu index="group-monitor">
               <template #title><el-icon><DataLine /></el-icon><span>实时监控</span></template>
-              <el-menu-item index="sse">实时数据流 (SSE)</el-menu-item>
+              <el-menu-item index="sse">实时数据</el-menu-item>
             </el-sub-menu>
             <el-sub-menu index="group-data">
               <template #title><el-icon><Histogram /></el-icon><span>历史数据</span></template>

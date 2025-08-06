@@ -12,7 +12,7 @@
             <RouterLink to="/monitor" class="nav-link">监控</RouterLink>
             <RouterLink to="/history" class="nav-link">历史数据</RouterLink>
             <RouterLink to="/ai-stock" class="nav-link">AI选股</RouterLink>
-            <RouterLink to="/api-docs" class="nav-link">API文档</RouterLink>
+            <RouterLink to="/docs" class="nav-link">API文档</RouterLink>
             <RouterLink to="/about" class="nav-link">关于</RouterLink>
           </div>
 

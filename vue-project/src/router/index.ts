@@ -15,11 +15,10 @@ const router = createRouter({
       component: MainLayout,
       children: [
         { path: '', name: 'home', component: () => import('@/views/HomeView.vue') },
-        { path: 'monitor', name: 'monitor', component: () => import('@/views/MonitorView.vue'), meta: { requiresAuth: true } },
-        { path: 'history', name: 'history', component: () => import('@/views/HistoryView.vue'), meta: { requiresAuth: true } },
-
-        { path: 'api-docs', name: 'api-docs', component: () => import('@/views/ApiView.vue') },
-        { path: 'ai-stock', name: 'ai选股', component: () => import('@/views/AIStockView.vue'), meta: { requiresAuth: true } },
+        { path: 'monitor', name: 'monitor', component: () => import('@/views/MonitorView.vue')},
+        { path: 'history', name: 'history', component: () => import('@/views/HistoryView.vue')},
+        { path: 'docs', name: 'api-docs', component: () => import('@/views/ApiView.vue') },
+        { path: 'ai-stock', name: 'ai选股', component: () => import('@/views/AIStockView.vue') },
         { path: 'about', name: 'about', component: () => import('@/views/AboutView.vue') },
         { path: 'user', name: 'user', component: () => import('@/views/UserCenterView.vue'), meta: { requiresAuth: true } },
         { path: 'super-manager', name: 'super-manager', component: () => import('@/views/SuperManagerView.vue'), meta: { requiresAdmin: true } }
