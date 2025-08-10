@@ -194,7 +194,7 @@ const handleUserCommand = async (command: string) => {
 }
 .nav-link {
   color: #94a3b8;
-  padding: 0.75rem 1.25rem;
+  padding: 0.5rem 1.25rem;
   text-decoration: none;
   border-radius: 8px;
 }

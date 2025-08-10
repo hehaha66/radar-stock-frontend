@@ -1,7 +1,8 @@
+<!-- 文件: UserCenterView.vue (最终完整版 - 包含 script, template, style) -->
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useUserStore } from '@/stores/user';
-import type { UserInfo } from '@/stores/user';
+import type { UserInfo } from '@/types/user';
 import service from '@/api/request';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -12,172 +13,126 @@ const userStore = useUserStore();
 const activeTab = ref('dashboard');
 
 // --- 状态变量 ---
-interface PlanConfig {
-  [key: string]: any;
-}
+interface PlanConfig { [key: string]: any; }
 const plansConfig = ref<PlanConfig>({});
-interface PricingConfig {
-  [key: string]: {
-    monthly: { price: number; daily_price: string; };
-    yearly: { price: number; };
-  };
-}
+interface PricingConfig { [key: string]: { monthly: { price: number; daily_price: string; }; yearly: { price: number; }; }; }
 const localPricing: PricingConfig = {
   pro: { monthly: { price: 28, daily_price: '0.9' }, yearly: { price: 268 } },
   master: { monthly: { price: 588, daily_price: '19.6' }, yearly: { price: 5888 } }
 };
-const profileForm = ref({ nickname: '', real_name: '', id_card_number: '' });
+const profileForm = ref({ nickname: '', real_name: '', id_card_number: '', phone_number: '' });
 const phoneForm = ref({ phone_number: '', code: '' });
 const passwordForm = ref({ current_password: '', new_password: '', confirm_password: '' });
 const isCodeSending = ref(false);
 const countdown = ref(0);
 
-
-
-// 用户统计数据
-const userStats = ref({
-  totalTrades: 156,
-  winRate: 68.5,
-  avgReturn: 12.3,
-  totalProfit: 15680,
-  ranking: 1250,
-  level: '金牌交易员',
-  achievements: [
-    { id: 1, name: '首次交易', description: '完成第一笔交易', unlocked: true },
-    { id: 2, name: '盈利达人', description: '连续盈利10天', unlocked: true },
-    { id: 3, name: '风险控制', description: '单日亏损不超过5%', unlocked: false },
-    { id: 4, name: '交易大师', description: '完成1000笔交易', unlocked: false }
-  ]
-});
-
 // --- 计算属性 ---
 const user = computed(() => userStore.userInfo);
 
 const daysRemaining = computed(() => {
-  if (user.value?.expires_at) {
-    const expiryDate = new Date(user.value.expires_at);
-    const now = new Date();
-    const diffTime = expiryDate.getTime() - now.getTime();
-    if (diffTime < 0) return '已过期';
-    return `${Math.ceil(diffTime / (1000 * 60 * 60 * 24))} 天`;
-  }
-  return '无限期';
+  if (!user.value) return 'N/A';
+  if (user.value.plan === 'admin' || !user.value.expires_at) { return '无限期'; }
+  const expiryDate = new Date(user.value.expires_at);
+  const now = new Date();
+  const diffTime = expiryDate.getTime() - now.getTime();
+  if (diffTime < 0) return '已过期';
+  return `${Math.ceil(diffTime / (1000 * 60 * 60 * 24))} 天`;
 });
 
 const plansList = computed(() => {
-  return Object.entries(plansConfig.value)
-    .map(([name, details]) => ({ name, details }))
+  if (plansConfig.value && typeof plansConfig.value === 'object') {
+    return Object.entries(plansConfig.value).map(([name, details]) => ({ name, details }));
+  }
+  return [];
 });
 
-// --- API 调用与方法 (无修改) ---
-const fetchPlans = async () => { try { plansConfig.value = await service.get('/subscription/plans'); } catch (error) { console.error('获取套餐信息失败:', error); } };
-const copyApiToken = () => { 
+// --- API 调用与方法 ---
+const fetchPlans = async () => {
+  try {
+    const response = await service.get('/subscription/plans');
+    plansConfig.value = response.data;
+  } catch (error) {
+    console.error('获取套餐信息失败:', error);
+  }
+};
+const copyApiToken = () => {
   const token = userStore.apiToken;
-  if (token) { 
-    navigator.clipboard.writeText(token); 
-    ElMessage.success('API Token 已复制到剪贴板'); 
+  if (token) {
+    navigator.clipboard.writeText(token);
+    ElMessage.success('API Token 已复制到剪贴板');
   } else {
     ElMessage.error('无法获取API Token');
   }
 };
-const resetApiToken = async () => { 
-  try { 
-    await ElMessageBox.confirm('您确定要重置 API Token 吗？旧的 Token 将立即失效。', '确认操作', { type: 'warning' }); 
-    const updatedUserInfo: UserInfo = await service.post('/auth/me/reset-api-token'); 
-    userStore.updateUserInfo(updatedUserInfo); 
-    ElMessage.success('API Token 重置成功！'); 
-  } catch (error) { 
-    if (error !== 'cancel') ElMessage.error('API Token 重置失败'); 
-  } 
+const resetApiToken = async () => {
+  try {
+    await ElMessageBox.confirm('您确定要重置 API Token 吗？旧的 Token 将立即失效。', '确认操作', { type: 'warning' });
+    const response = await service.post('/auth/me/reset-api-token');
+    // 使用 updateUserInfo 来更新 store，因为它只更新部分字段
+    userStore.updateUserInfo(response.data);
+    ElMessage.success(response.msg || 'API Token 重置成功！');
+  } catch (error) {
+    // 拦截器已处理错误消息
+  }
 };
-const updateProfile = async () => { 
-  if (!user.value) return; 
-  try { 
-    const payload: Partial<UserInfo> = {}; 
-    if (profileForm.value.nickname !== user.value.nickname) { 
-      payload.nickname = profileForm.value.nickname; 
-    } 
-    if (profileForm.value.real_name !== user.value.real_name) { 
-      payload.real_name = profileForm.value.real_name; 
-    } 
-    if (profileForm.value.id_card_number !== user.value.id_card_number) { 
-      payload.id_card_number = profileForm.value.id_card_number; 
-    } 
-    if (Object.keys(payload).length === 0) { 
-      ElMessage.info('没有需要更新的信息。'); 
-      return; 
-    } 
-    const response: any = await service.put('/auth/me/profile', payload); 
-    userStore.setUserInfo(response); 
-    ElMessage.success('个人资料更新成功！'); 
-  } catch (error: any) { 
-    ElMessage.error(error.response?.data?.detail || '更新失败'); 
-  } 
+const updateProfile = async () => {
+  if (!user.value) return;
+  try {
+    const payload: Partial<UserInfo> = {};
+    if (profileForm.value.nickname !== user.value.nickname) { payload.nickname = profileForm.value.nickname; }
+    if (profileForm.value.real_name !== user.value.real_name) { payload.real_name = profileForm.value.real_name; }
+    if (profileForm.value.id_card_number !== user.value.id_card_number) { payload.id_card_number = profileForm.value.id_card_number; }
+    if (Object.keys(payload).length === 0) { ElMessage.info('没有需要更新的信息。'); return; }
+    const response = await service.put('/auth/me/profile', payload);
+    userStore.updateUserInfo(response.data);
+    ElMessage.success('个人资料更新成功！');
+  } catch (error) {
+    // 拦截器已处理
+  }
 };
-const sendPhoneCode = () => { 
-  if (!/1[3-9]\d{9}/.test(phoneForm.value.phone_number)) { 
-    ElMessage.error('请输入有效的手机号码'); 
-    return; 
-  } 
-  isCodeSending.value = true; 
-  countdown.value = 60; 
-  ElMessage.success('验证码已发送 (模拟: 000000)'); 
-  const timer = setInterval(() => { 
-    countdown.value--; 
-    if (countdown.value <= 0) { 
-      clearInterval(timer); 
-      isCodeSending.value = false; 
-    } 
-  }, 1000); 
+const sendPhoneCode = () => {
+  if (!/1[3-9]\d{9}/.test(phoneForm.value.phone_number)) { ElMessage.error('请输入有效的手机号码'); return; }
+  isCodeSending.value = true;
+  countdown.value = 60;
+  ElMessage.success('验证码已发送 (模拟: 000000)');
+  const timer = setInterval(() => {
+    countdown.value--;
+    if (countdown.value <= 0) { clearInterval(timer); isCodeSending.value = false; }
+  }, 1000);
 }
-const bindPhoneNumber = async () => { 
-  if (phoneForm.value.code !== '000000') { 
-    ElMessage.error('验证码不正确 (模拟验证码为 000000)'); 
-    return; 
-  } 
-  try { 
-    const response: any = await service.put('/auth/me/profile', { 
-      phone_number: phoneForm.value.phone_number 
-    }); 
-    userStore.setUserInfo(response); 
-    ElMessage.success('手机号绑定成功！'); 
-  } catch (error: any) { 
-    ElMessage.error(error.response?.data?.detail || '绑定失败'); 
-  } 
+const bindPhoneNumber = async () => {
+  if (phoneForm.value.code !== '000000') { ElMessage.error('验证码不正确 (模拟验证码为 000000)'); return; }
+  try {
+    const response = await service.put('/auth/me/profile', { phone_number: phoneForm.value.phone_number });
+    userStore.updateUserInfo(response.data);
+    ElMessage.success('手机号绑定成功！');
+  } catch (error) {
+    // 拦截器已处理
+  }
 }
-const changePassword = async () => { 
-  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) { 
-    ElMessage.error('新密码和确认密码不一致'); 
-    return; 
-  } 
-  try { 
-    const response: any = await service.put('/auth/me/password', { 
-      current_password: passwordForm.value.current_password, 
-      new_password: passwordForm.value.new_password, 
-    }); 
-    ElMessage.success(response.message + ' 请重新登录。'); 
-    setTimeout(() => { 
-      userStore.logout(); 
-      window.location.href = '/login'; 
-    }, 2000); 
-  } catch (error) { 
-    /* Interceptor handles message */ 
-  } 
+const changePassword = async () => {
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) { ElMessage.error('新密码和确认密码不一致'); return; }
+  try {
+    const response = await service.put('/auth/me/password', {
+      current_password: passwordForm.value.current_password,
+      new_password: passwordForm.value.new_password,
+    });
+    ElMessage.success(response.msg + ' 请重新登录。');
+    setTimeout(() => { userStore.logout(); }, 2000);
+  } catch (error) {
+    // 拦截器已处理
+  }
 };
-const handleUpgrade = async (plan: string, duration: string) => { 
-  ElMessage.info(`正在跳转到支付页面以购买 ${plan} (${duration})... (模拟)`); 
-  try { 
-    const response: any = await service.post('/subscription/upgrade', { 
-      plan, 
-      duration 
-    }); 
-    userStore.setUserInfo(response); 
-    ElMessage.success("套餐升级成功！"); 
-  } catch (error) { 
-    /* Interceptor handles message */ 
-  } 
+const handleUpgrade = async (plan: string, duration: string) => {
+  ElMessage.info(`正在跳转到支付页面以购买 ${plan} (${duration})... (模拟)`);
+  try {
+    const response = await service.post('/subscription/upgrade', { plan, duration });
+    userStore.updateUserInfo(response.data);
+    ElMessage.success(response.msg || "套餐升级成功！");
+  } catch (error) {
+    // 拦截器已处理
+  }
 }
-
 
 onMounted(() => {
   fetchPlans();
@@ -185,7 +140,7 @@ onMounted(() => {
     profileForm.value.nickname = user.value.nickname || '';
     profileForm.value.real_name = user.value.real_name || '';
     profileForm.value.id_card_number = user.value.id_card_number || '';
-    phoneForm.value.phone_number = user.value.phone_number || '';
+    profileForm.value.phone_number = user.value.phone_number || '';
   }
 });
 
@@ -194,12 +149,9 @@ watch(user, (newUser) => {
         profileForm.value.nickname = newUser.nickname || '';
         profileForm.value.real_name = newUser.real_name || '';
         profileForm.value.id_card_number = newUser.id_card_number || '';
-        phoneForm.value.phone_number = newUser.phone_number || '';
+        profileForm.value.phone_number = newUser.phone_number || '';
     }
 }, { deep: true });
-
-
-
 </script>
 
 <template>
@@ -254,7 +206,7 @@ watch(user, (newUser) => {
                           </div>
                           <div class="dashboard-item">
                               <span>模拟积分:</span>
-                              <strong>{{ user.total_points?.toLocaleString() }}</strong>
+                              <strong>{{ user.total_points?.toLocaleString() || 'N/A' }}</strong>
                           </div>
                           <el-divider />
                           <h4>权限概览</h4>
@@ -287,7 +239,18 @@ watch(user, (newUser) => {
             </div>
             <!-- 套餐与充值 -->
             <div v-if="activeTab === 'plans'">
-                <el-card shadow="never" class="content-card">
+              <!-- 根据用户是否为管理员显示不同内容 -->
+              <el-card shadow="never" class="content-card" v-if="user.is_superuser">
+                <template #header><h3>管理员权限说明</h3></template>
+                <el-result
+                    icon="success"
+                    title="您是系统管理员"
+                    sub-title="您已拥有所有最高权限，无需订阅任何套餐。"
+                >
+                </el-result>
+              </el-card>
+
+              <el-card shadow="never" class="content-card" v-else>
                   <template #header><h3>选择适合您的套餐计划</h3></template>
                                     <div class="plans-wrapper">
                     <template v-for="p in plansList" :key="p.name">
@@ -315,6 +278,8 @@ watch(user, (newUser) => {
                           <li><el-icon><Timer /></el-icon> <span><strong>{{ p.details.min_interval }}</strong> 秒刷新频率</span></li>
                           <li><el-icon><Platform /></el-icon> <span><strong>{{ p.details.max_connections === -1 ? '无限制' : `${p.details.max_connections}个` }}</strong> 并发连接</span></li>
                           <li><el-icon><MagicStick /></el-icon> <span><strong>{{ p.details.max_custom_indicators === -1 ? '无限制' : `${p.details.max_custom_indicators}个` }}</strong> 自定义指标</span></li>
+                          <li><el-icon><Grid /></el-icon> <span><strong>{{ p.details.max_stock_groups === -1 ? '无限制' : `${p.details.max_stock_groups}个` }}</strong> 股票分组</span></li>
+                          <li><el-icon><Bell /></el-icon> <span><strong>{{ p.details.max_alerts === -1 ? '无限制' : `${p.details.max_alerts}个` }}</strong> 价格预警</span></li>
                           <li><el-icon><Promotion /></el-icon> <span>API 访问: <strong>{{ p.details.api_access_level !== 'none' ? '支持' : '不支持' }}</strong></span></li>
                         </ul>
 
@@ -395,7 +360,9 @@ watch(user, (newUser) => {
                         <el-form-item label="确认新密码">
                             <el-input v-model="passwordForm.confirm_password" type="password" show-password />
                         </el-form-item>
-                        <el-button type="primary" native-type="submit">确认修改</el-button>
+                        <el-form-item>
+                          <el-button type="primary" native-type="submit">确认修改</el-button>
+                        </el-form-item>
                     </el-form>
                 </el-card>
             </div>

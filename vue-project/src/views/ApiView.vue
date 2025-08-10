@@ -1,30 +1,34 @@
-<!-- 文件: src/views/ApiView.vue (最终布局修复版) -->
-
 <template>
-  <div class="api-docs-container">
-    <!-- Login Wall: Show this if user is not logged in -->
-    <el-card v-if="!userStore.isLoggedIn" shadow="never" class="login-prompt-card">
-      <div class="login-prompt-content">
-        <el-icon :size="50" color="#f56c6c"><WarningFilled /></el-icon>
-        <h3 class="prompt-title">请先登录</h3>
-        <p class="prompt-text">您需要登录后才能访问和测试 API 功能。</p>
-        <router-link to="/login">
-          <el-button type="primary" size="large">前往登录页面</el-button>
-        </router-link>
-      </div>
-    </el-card>
+  <div class="api-page-container">
+    <!-- Aurora Background Glow -->
+    <div class="aurora-glow aurora-glow-1"></div>
+    <div class="aurora-glow aurora-glow-2"></div>
+    <div class="aurora-glow aurora-glow-3"></div>
 
-    <!-- Main Content: Show this if user is logged in -->
+    <!-- Login Wall: Unchanged -->
+    <div v-if="!userStore.isLoggedIn" class="login-prompt-wrapper">
+      <el-card shadow="never" class="login-prompt-card">
+        <div class="login-prompt-content">
+          <el-icon :size="50" color="#f56c6c"><WarningFilled /></el-icon>
+          <h3 class="prompt-title">请先登录</h3>
+          <p class="prompt-text">您需要登录后才能访问和测试 API 功能。</p>
+          <router-link to="/login">
+            <el-button type="primary" size="large">前往登录页面</el-button>
+          </router-link>
+        </div>
+      </el-card>
+    </div>
+
+    <!-- Main Content: Refined Three-Column Layout -->
     <div v-else class="workbench-grid">
       <!-- Left Column: API Navigation & Header -->
-      <div class="api-nav-column">
+      <aside class="api-nav-column">
         <div class="workbench-header">
           <h1><el-icon><Platform /></el-icon> 开发者工作台</h1>
           <p class="desc">一个交互式的 API 测试与集成环境。</p>
         </div>
-
-        <el-card shadow="never" class="nav-card">
-          <template #header><div class="card-header"><span>API 端点</span></div></template>
+        <div class="api-card nav-card">
+          <h3 class="card-title"><el-icon><Guide /></el-icon> API 端点</h3>
           <el-menu :default-active="activeView" @select="handleMenuSelect" class="api-menu">
             <el-sub-menu index="group-monitor">
               <template #title><el-icon><DataLine /></el-icon><span>实时监控</span></template>
@@ -35,16 +39,16 @@
               <el-menu-item index="history">K线数据</el-menu-item>
             </el-sub-menu>
           </el-menu>
-        </el-card>
-      </div>
+        </div>
+      </aside>
 
       <!-- Middle Column: Request Configuration & Response -->
-      <div class="main-content-column">
-        <transition name="fade" mode="out-in">
+      <main class="main-content-column">
+        <transition name="view-fade" mode="out-in">
           <!-- SSE View -->
           <div v-if="activeView === 'sse'" key="sse-view" class="view-wrapper">
-            <el-card shadow="never" class="request-card">
-              <template #header><div class="card-header"><span><el-icon><Setting /></el-icon> 参数配置</span></div></template>
+            <div class="api-card request-card">
+              <h3 class="card-title"><el-icon><Setting /></el-icon> 参数配置</h3>
               <el-form :model="sseForm" label-position="top">
                 <el-form-item :label="`股票代码 (最多 ${userPlanLimits.max_codes === -1 ? '无限制' : userPlanLimits.max_codes} 只)`">
                   <el-input v-model="sseForm.codes" :prefix-icon="Tickets" placeholder="例如: 000001,TSLA" />
@@ -53,98 +57,84 @@
                   <el-input-number v-model="sseForm.interval" :min="userPlanLimits.min_interval" :step="0.1" style="width: 100%;"/>
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="startSseStream" :disabled="isSseRunning" :icon="VideoPlay">开始获取</el-button>
-                  <el-button type="danger" @click="stopSseStream" :disabled="!isSseRunning" :icon="SwitchButton">停止获取</el-button>
+                  <el-button type="primary" size="large" @click="startSseStream" :disabled="isSseRunning" :icon="VideoPlay">开始获取</el-button>
+                  <el-button type="danger" plain @click="stopSseStream" :disabled="!isSseRunning" :icon="SwitchButton">停止获取</el-button>
                 </el-form-item>
               </el-form>
-            </el-card>
-            <el-card shadow="never" class="response-card">
-              <template #header><div class="card-header"><span><el-icon><Monitor /></el-icon> 实时数据输出</span></div></template>
+            </div>
+            <div class="api-card response-card">
+              <h3 class="card-title"><el-icon><Monitor /></el-icon> 实时数据输出</h3>
               <div class="output-wrapper">
                 <pre class="output-log hljs"><code v-html="latestSseDataJson"></code></pre>
               </div>
-            </el-card>
+            </div>
           </div>
 
           <!-- History View -->
           <div v-else-if="activeView === 'history'" key="history-view" class="view-wrapper">
-            <el-card shadow="never" class="request-card">
-              <template #header><div class="card-header"><span><el-icon><Setting /></el-icon> 参数配置</span></div></template>
+            <div class="api-card request-card">
+              <h3 class="card-title"><el-icon><Setting /></el-icon> 参数配置</h3>
               <el-form :model="historyParams" label-position="top">
                 <el-row :gutter="20">
-                  <el-col :span="12">
-                    <el-form-item label="股票代码"><el-input v-model="historyParams.code" placeholder="例如: 600519" :prefix-icon="Tickets"/></el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="开始日期 (YYYYMMDD)"><el-input v-model="historyParams.start_date" placeholder="例如: 20230101" :prefix-icon="Calendar"/></el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="复权方式"><el-select v-model="historyParams.adjust" placeholder="选择" style="width: 100%;"><el-option label="前复权 (qfq)" value="qfq" /><el-option label="后复权 (hfq)" value="hfq" /></el-select></el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="周期"><el-select v-model="historyParams.period" placeholder="选择" style="width: 100%;"><el-option label="日 K" value="daily" /><el-option label="周 K" value="weekly" /><el-option label="月 K" value="monthly" /></el-select></el-form-item>
-                  </el-col>
+                  <el-col :span="12"><el-form-item label="股票代码"><el-input v-model="historyParams.code" placeholder="例如: 600519" :prefix-icon="Tickets"/></el-form-item></el-col>
+                  <el-col :span="12"><el-form-item label="开始日期 (YYYYMMDD)"><el-input v-model="historyParams.start_date" placeholder="例如: 20230101" :prefix-icon="Calendar"/></el-form-item></el-col>
+                  <el-col :span="12"><el-form-item label="复权方式"><el-select v-model="historyParams.adjust" placeholder="选择" style="width: 100%;"><el-option label="前复权 (qfq)" value="qfq" /><el-option label="后复权 (hfq)" value="hfq" /></el-select></el-form-item></el-col>
+                  <el-col :span="12"><el-form-item label="周期"><el-select v-model="historyParams.period" placeholder="选择" style="width: 100%;"><el-option label="日 K" value="daily" /><el-option label="周 K" value="weekly" /><el-option label="月 K" value="monthly" /></el-select></el-form-item></el-col>
                 </el-row>
-                <el-form-item>
-                  <el-button type="primary" @click="fetchHistoryData" :loading="isLoadingHistory" :icon="Search">发送请求</el-button>
-                </el-form-item>
+                <el-form-item><el-button type="primary" size="large" @click="fetchHistoryData" :loading="isLoadingHistory" :icon="Search">发送请求</el-button></el-form-item>
               </el-form>
-            </el-card>
-            <el-card shadow="never" class="response-card">
-              <template #header><div class="card-header"><span><el-icon><Document /></el-icon> API 输出</span></div></template>
+            </div>
+            <div class="api-card response-card">
+              <h3 class="card-title"><el-icon><Document /></el-icon> API 输出</h3>
               <div class="output-wrapper">
-                <el-button v-if="historyResponse && historyResponse.data?.length > 5" @click="isDataCollapsed = !isDataCollapsed" class="collapse-button" size="small" type="primary" plain>
-                  {{ isDataCollapsed ? '展开数据' : '收起数据' }}
-                </el-button>
+                <el-button v-if="historyResponse && historyResponse.data?.length > 5" @click="isDataCollapsed = !isDataCollapsed" class="collapse-button" size="small" type="primary" plain>{{ isDataCollapsed ? '展开数据' : '收起数据' }}</el-button>
                 <pre v-if="historyResponse" class="output-log hljs"><code v-html="highlightedHistoryResponse"></code></pre>
                 <div v-else class="placeholder">点击"发送请求"后，结果将显示在这里</div>
               </div>
-            </el-card>
+            </div>
           </div>
         </transition>
-      </div>
+      </main>
 
       <!-- Right Column: Code Snippets -->
-      <div class="code-snippet-column">
-        <transition name="fade" mode="out-in">
-          <el-card v-if="activeView === 'sse'" shadow="never" class="code-card" key="sse-code">
-            <template #header>
-              <div class="card-header">
-                <span><el-icon><Cpu /></el-icon> Python 请求代码</span>
-                <el-radio-group v-model="sseCodeExampleFormat" size="small">
-                  <el-radio-button label="中文名" value="verbose"></el-radio-button>
-                  <el-radio-button label="aN 字段" value="aN"></el-radio-button>
-                </el-radio-group>
-              </div>
-            </template>
+      <aside class="code-snippet-column">
+        <transition name="view-fade" mode="out-in">
+          <div v-if="activeView === 'sse'" class="api-card code-card" key="sse-code">
+            <div class="code-card-header">
+              <h3 class="card-title"><el-icon><Cpu /></el-icon> Python 请求代码</h3>
+              <el-radio-group v-model="sseCodeExampleFormat" size="small">
+                <el-radio-button label="中文名" value="verbose"></el-radio-button>
+                <el-radio-button label="aN 字段" value="aN"></el-radio-button>
+              </el-radio-group>
+            </div>
             <div class="code-wrapper">
-              <el-button class="copy-button" size="small" type="primary" plain :icon="sseCopied ? Check : CopyDocument" @click="copyCode(pythonSseCodeSnippet, 'sse')">
-                {{ sseCopied ? '已复制' : '复制' }}
-              </el-button>
+              <el-button class="copy-button" size="small" type="primary" plain :icon="sseCopied ? Check : CopyDocument" @click="copyCode(pythonSseCodeSnippet, 'sse')">{{ sseCopied ? '已复制' : '复制' }}</el-button>
               <pre class="code-snippet hljs"><code v-html="hljs.highlight(pythonSseCodeSnippet, { language: 'python' }).value"></code></pre>
             </div>
-          </el-card>
+          </div>
 
-          <el-card v-else-if="activeView === 'history'" shadow="never" class="code-card" key="history-code">
-            <template #header><div class="card-header"><span><el-icon><Cpu /></el-icon> Python 请求代码</span></div></template>
+          <div v-else-if="activeView === 'history'" class="api-card code-card" key="history-code">
+            <div class="code-card-header">
+              <h3 class="card-title"><el-icon><Cpu /></el-icon> Python 请求代码</h3>
+            </div>
             <div class="code-wrapper">
-              <el-button class="copy-button" size="small" type="primary" plain :icon="historyCopied ? Check : CopyDocument" @click="copyCode(pythonHistoryCodeSnippet, 'history')">
-                {{ historyCopied ? '已复制' : '复制' }}
-              </el-button>
+              <el-button class="copy-button" size="small" type="primary" plain :icon="historyCopied ? Check : CopyDocument" @click="copyCode(pythonHistoryCodeSnippet, 'history')">{{ historyCopied ? '已复制' : '复制' }}</el-button>
               <pre class="code-snippet hljs"><code v-html="hljs.highlight(pythonHistoryCodeSnippet, { language: 'python' }).value"></code></pre>
             </div>
-          </el-card>
+          </div>
         </transition>
-      </div>
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+// The <script> part remains exactly the same.
+// You can copy your existing <script setup lang="ts"> block here.
 import { ref, computed, onUnmounted } from 'vue';
 import { useUserStore } from '@/stores/user';
 import { ElMessage } from 'element-plus';
-import { CopyDocument, WarningFilled, Check, Tickets, Calendar, Search, VideoPlay, SwitchButton, Platform, DataLine, Histogram, Setting, Monitor, Document, Cpu } from '@element-plus/icons-vue';
+import { CopyDocument, WarningFilled, Check, Tickets, Calendar, Search, VideoPlay, SwitchButton, Platform, DataLine, Histogram, Setting, Monitor, Document, Cpu, Guide } from '@element-plus/icons-vue';
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/atom-one-dark.css';
 import { PLANS_CONFIG } from '@/config/plans';
@@ -345,49 +335,118 @@ except Exception as e:
 </script>
 
 <style scoped>
-/* 引入编程字体 */
+/* Import modern fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
 
-.api-docs-container { padding: 2rem; max-width: 100%; margin: 0 auto; }
+.api-page-container {
+  font-family: 'Inter', sans-serif;
+  background-color: #0f172a; /* Slate 900 */
+  color: #cbd5e1; /* Slate 300 */
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: 2rem;
+}
+
+/* --- Aurora Background --- */
+.aurora-glow { position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.1; pointer-events: none; z-index: 0; }
+.aurora-glow-1 { background-color: #38bdf8; width: 500px; height: 500px; top: -150px; left: -150px; }
+.aurora-glow-2 { background-color: #818cf8; width: 600px; height: 600px; top: 50%; right: -300px; transform: translateY(-50%); }
+.aurora-glow-3 { background-color: #f472b6; width: 400px; height: 400px; bottom: -150px; left: 40%; }
 
 /* --- Login Wall --- */
-.login-prompt-card { text-align: center; background-color: rgba(30, 41, 59, 0.5); border-color: rgba(248, 113, 113, 0.3); }
-.login-prompt-content { padding: 2rem; }
+.login-prompt-wrapper { display: flex; align-items: center; justify-content: center; height: calc(100vh - 4rem); }
+.login-prompt-card { text-align: center; background-color: rgba(30, 41, 59, 0.8); border: 1px solid #1e293b; backdrop-filter: blur(12px); max-width: 450px; border-radius: 16px; padding: 1rem; }
+.login-prompt-content { padding: 1rem 2rem; }
 .prompt-title { font-size: 1.5rem; font-weight: 600; margin: 1rem 0; color: #f87171; }
 .prompt-text { margin-bottom: 1.5rem; color: #cbd5e1; }
 
-/* --- Workbench Layout --- */
-.workbench-grid { display: grid; grid-template-columns: 320px 1fr 1fr; gap: 2rem; height: calc(100vh - 4rem - 20px); }
-.api-nav-column, .main-content-column, .code-snippet-column { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.main-content-column { gap: 2rem; }
-.view-wrapper { display: flex; flex-direction: column; gap: 2rem; height: 100%; overflow: hidden; }
+/* --- Three-Column Workbench Layout --- */
+.workbench-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 2rem;
+  max-width: 1800px;
+  margin: 0 auto;
+  height: calc(100vh - 4rem);
+}
 
-/* --- Cards --- */
-.nav-card, .request-card, .response-card, .code-card { background-color: rgba(30, 41, 59, 0.5); border: 1px solid rgba(51, 65, 85, 0.7); backdrop-filter: blur(12px); display: flex; flex-direction: column; }
+.api-nav-column, .main-content-column, .code-snippet-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  height: 100%;
+}
+.view-wrapper { display: flex; flex-direction: column; gap: 2rem; height: 100%; }
+
+/* --- Modern Card Style --- */
+.api-card {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(30, 41, 59, 0.4));
+  border-radius: 16px;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+/* Card Glow Border */
+.api-card::before {
+  content: ''; position: absolute; inset: 0; border-radius: 16px; padding: 1px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.3), rgba(51, 65, 85, 0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+.card-title {
+  font-size: 1.25rem; font-weight: 600; color: #e2e8f0; margin: 0 0 1.5rem 0;
+  display: flex; align-items: center; gap: 0.75rem;
+}
 .request-card { flex-shrink: 0; }
-.response-card { flex-grow: 1; min-height: 200px; overflow: hidden; }
-.code-card { height: 100%; position: relative; }
-:deep(.el-card__header) { border-bottom-color: rgba(51, 65, 85, 0.7); padding: 16px 20px; }
-:deep(.el-card__body) { padding: 0; flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+.response-card { flex-grow: 1; min-height: 200px; }
+.code-card { height: 100%; }
 
-/* --- Card Header --- */
-.card-header { font-size: 1.1rem; font-weight: 600; color: #d1d5db; display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 1rem; }
-.card-header > span { display: flex; align-items: center; gap: 0.5rem; margin-right: auto; }
+/* --- Left Column --- */
+.workbench-header { margin-bottom: 0; }
+h1 { font-size: 2rem; display: flex; align-items: center; gap: 0.75rem; color: #e5e7eb; margin: 0 0 0.5rem 0; }
+.desc { color: #9ca3af; font-size: 1rem; line-height: 1.5; }
+.api-menu { background: transparent; border-right: none; margin-top: -1rem; /* to align with title */ }
+:deep(.el-sub-menu__title), :deep(.el-menu-item) {
+  background-color: transparent !important; color: #94a3b8 !important; height: 48px;
+  line-height: 48px; border-radius: 8px; transition: all 0.2s ease;
+}
+:deep(.el-menu-item.is-active) {
+  color: #fff !important; background-color: rgba(56, 189, 248, 0.1) !important; font-weight: 600;
+}
+:deep(.el-menu-item:hover), :deep(.el-sub-menu__title:hover) {
+  background-color: rgba(255,255,255,0.05) !important; color: #fff !important;
+}
 
-/* --- Left Column: Header & Menu --- */
-.api-nav-column .workbench-header { text-align: left; margin-bottom: 2rem; padding: 0 1rem; }
-.api-nav-column h1 { font-size: 2rem; display: flex; align-items: center; gap: 0.75rem; color: #e5e7eb; margin: 0 0 0.5rem 0; }
-.api-nav-column .desc { color: #9ca3af; font-size: 1rem; line-height: 1.5; }
-.api-menu { background: transparent; border-right: none; }
-:deep(.el-sub-menu__title), :deep(.el-menu-item) { background-color: transparent !important; color: #9ca3af !important; }
-:deep(.el-menu-item.is-active) { color: var(--el-color-primary) !important; }
-:deep(.el-menu-item:hover), :deep(.el-sub-menu__title:hover) { background-color: rgba(255,255,255,0.05) !important; }
-
-/* --- Middle & Right Columns --- */
+/* --- Code & Output --- */
+.code-card-header { display: flex; justify-content: space-between; align-items: center; }
 .output-wrapper, .code-wrapper { flex-grow: 1; position: relative; display: flex; flex-direction: column; height: 100%; }
 .placeholder { flex-grow: 1; display: flex; align-items: center; justify-content: center; color: #64748b; font-style: italic; padding: 20px; }
-.output-log, .code-snippet { font-family: 'Fira Code', monospace; font-size: 14px; background-color: rgba(17, 24, 39, 0.8) !important; padding: 20px; text-align: left; white-space: pre-wrap; word-wrap: break-word; width: 100%; box-sizing: border-box; color: #d1d5db; flex-grow: 1; overflow: auto; }
-.copy-button, .collapse-button { position: absolute; top: 12px; right: 20px; z-index: 10; }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease-in-out; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.output-log, .code-snippet {
+  font-family: 'Fira Code', monospace; font-size: 14px;
+  background-color: #020617 !important; /* Rich black bg */
+  padding: 1.25rem; border-radius: 12px;
+  text-align: left; white-space: pre-wrap; word-wrap: break-word; width: 100%;
+  box-sizing: border-box; color: #d1d5db; flex-grow: 1; overflow: auto;
+}
+.copy-button, .collapse-button { position: absolute; top: 12px; right: 12px; z-index: 10; }
+
+/* --- Form Elements --- */
+:deep(.el-form-item__label) { color: #94a3b8; }
+:deep(.el-input__wrapper), :deep(.el-select__wrapper), :deep(.el-input-number) {
+  background-color: rgba(15, 23, 42, 0.8) !important;
+  box-shadow: none !important; border: 1px solid #334155;
+}
+:deep(.el-input__inner) { color: #e2e8f0; }
+
+/* --- Transitions --- */
+.view-fade-enter-active, .view-fade-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
+.view-fade-enter-from, .view-fade-leave-to { opacity: 0; transform: translateY(10px); }
+
 </style>

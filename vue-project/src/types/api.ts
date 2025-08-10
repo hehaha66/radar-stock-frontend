@@ -1,11 +1,6 @@
-// src/types/api.ts
-
-/**
- * Standardized backend API response structure.
- * @template T - The type of the 'data' field.
- */
+// 文件: src/types/api.ts
 export interface ApiResponse<T = any> {
   code: number;
   msg: string;
   data: T;
-} 
+}

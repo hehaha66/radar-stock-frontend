@@ -1,4 +1,4 @@
-// 文件: src/stores/user.ts
+// 文件: src/stores/user.ts (最终完整版)
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
@@ -7,52 +7,73 @@ import type { LoginFormData, UserInfo, LoginResponse } from '@/types/user';
 
 export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(localStorage.getItem('user_token'));
-  const userInfo = ref<UserInfo | null>(null);
+  const userInfo = ref<UserInfo | null>(JSON.parse(localStorage.getItem('userInfo') || 'null'));
 
   const isLoggedIn = computed(() => !!token.value && !!userInfo.value);
   const apiToken = computed(() => userInfo.value?.api_token);
 
-  function setLoginInfo(data: LoginResponse) {
-    token.value = data.access_token;
-    userInfo.value = data.user_info;
-    localStorage.setItem('user_token', data.access_token);
+  function setStoreState(accessToken: string, newInfo: UserInfo) {
+    token.value = accessToken;
+    userInfo.value = newInfo;
+    localStorage.setItem('user_token', accessToken);
+    localStorage.setItem('userInfo', JSON.stringify(newInfo));
   }
 
   function clearLoginInfo() {
     token.value = null;
     userInfo.value = null;
     localStorage.removeItem('user_token');
+    localStorage.removeItem('userInfo');
   }
 
-  async function login(loginData: LoginFormData) {
-    const response = await loginApi(loginData);
-    setLoginInfo(response);
+  async function login(loginData: LoginFormData): Promise<boolean> {
+    try {
+      const response = await loginApi(loginData);
+      const loginResult: LoginResponse = response.data;
+      if (loginResult && loginResult.access_token && loginResult.user_info) {
+        setStoreState(loginResult.access_token, loginResult.user_info);
+        return true;
+      } else {
+        throw new Error("登录成功，但返回数据格式不正确");
+      }
+    } catch (error) {
+      clearLoginInfo();
+      throw error;
+    }
   }
 
   function logout() {
     clearLoginInfo();
-    // 路由跳转在组件中处理
+    window.location.reload();
   }
 
-  // --- 关键新增/修改点 ---
-  async function tryAutoLogin() {
-    // 只有在有 token 但没有用户信息时才执行
+  async function tryAutoLogin(): Promise<boolean> {
     if (token.value && !userInfo.value) {
       try {
-        const user = await getMeApi();
-        // 如果成功获取，说明 token 有效，更新用户信息
-        userInfo.value = user;
+        const response = await getMeApi();
+        if(response && response.data) {
+          userInfo.value = response.data;
+          localStorage.setItem('userInfo', JSON.stringify(response.data));
+          return true;
+        }
+        return false;
       } catch (error) {
-        // 如果失败 (例如 401)，说明 token 已过期，清理状态
-        console.warn("Auto login with stored token failed.", error);
         clearLoginInfo();
+        return false;
       }
     }
+    return !!userInfo.value;
   }
 
   function updateUserInfo(newUserInfo: UserInfo) {
-    userInfo.value = newUserInfo;
+      if (userInfo.value) {
+          const updated = { ...userInfo.value, ...newUserInfo };
+          userInfo.value = updated;
+          localStorage.setItem('userInfo', JSON.stringify(updated));
+      }
   }
-  
-  return { token, userInfo, isLoggedIn, apiToken, login, logout, tryAutoLogin, updateUserInfo };
+
+  return {
+    token, userInfo, isLoggedIn, apiToken, login, logout, tryAutoLogin, updateUserInfo, clearLoginInfo
+  };
 });

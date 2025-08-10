@@ -38,7 +38,7 @@ const startMonitoring = () => {
   stopMonitoring(); // 先停止之前的连接
 
   const url = `/api/monitor/sse/market-data?codes=${encodeURIComponent(codes.value)}&interval=${interval.value}&token=${userStore.apiToken}`;
-  
+
   eventSource.value = new EventSource(url);
   isMonitoring.value = true;
   connectionStatus.value = '连接中...';
@@ -92,17 +92,17 @@ onBeforeUnmount(() => {
           <el-input-number v-model="interval" :min="userStore.userInfo?.min_interval || 0.1" :step="0.1" />
         </el-form-item>
         <el-form-item>
-          <el-button 
-            type="primary" 
-            @click="startMonitoring" 
+          <el-button
+            type="primary"
+            @click="startMonitoring"
             :loading="isMonitoring"
             :disabled="!userStore.isLoggedIn"
           >
             {{ isMonitoring ? '监控中...' : '开始监控' }}
           </el-button>
-          <el-button 
-            type="danger" 
-            @click="stopMonitoring" 
+          <el-button
+            type="danger"
+            @click="stopMonitoring"
             :disabled="!isMonitoring"
           >
             停止监控

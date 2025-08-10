@@ -35,7 +35,7 @@ router.beforeEach(async (to, from, next) => {
   await userStore.tryAutoLogin();
 
   const isLoggedIn = userStore.isLoggedIn;
-  const isAdmin = userStore.userInfo?.role === 'admin';
+  const isAdmin = userStore.userInfo?.is_superuser === true;
 
   // 检查管理员权限
   if (to.meta.requiresAdmin) {

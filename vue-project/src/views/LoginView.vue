@@ -1,4 +1,4 @@
-
+<!-- 文件: LoginView.vue (最终修正完整版 V2.0) -->
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
@@ -8,13 +8,14 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 
-const email = ref('');
+// 统一使用 username
+const username = ref('');
 const password = ref('');
 const errorMessage = ref('');
 const isLoading = ref(false);
 
 const handleLogin = async () => {
-  if (!email.value || !password.value) {
+  if (!username.value || !password.value) {
     errorMessage.value = '请输入邮箱和密码。';
     return;
   }
@@ -22,34 +23,30 @@ const handleLogin = async () => {
   isLoading.value = true;
 
   try {
+    // 【【核心修正】】
+    // 传递给 store 的对象，属性名现在是 username，
+    // 与 LoginFormData 类型完全匹配。
     const success = await userStore.login({
-      email: email.value,
+      username: username.value,
       password: password.value,
     });
 
     if (success) {
-      // 检查 URL 中是否有 redirect 参数
       const redirectPath = route.query.redirect as string | undefined;
 
-      if (userStore.userInfo?.role === 'admin') {
-        // 管理员总是跳转到管理员页面
-        await router.push('/super-manager');
+      // 使用 is_superuser 来判断管理员身份
+      if (userStore.userInfo?.is_superuser) {
+        await router.push('/super-manager'); // 假设这是您的管理员后台路径
       } else if (redirectPath) {
-        // 如果有重定向路径，则跳转到该路径
         await router.push(redirectPath);
       } else {
-        // 否则，跳转到默认的主页
         await router.push('/');
       }
-    } else {
-      // The error message is now handled globally by the request interceptor,
-      // but we can set a generic one here as a fallback.
-      errorMessage.value = '登录失败，请检查您的凭据。';
     }
+    // 错误处理已由拦截器和store完成
   } catch (error: any) {
-    // This catch block will now primarily catch network errors,
-    // as API errors are handled by the interceptor.
-    errorMessage.value = error.message || '登录时发生网络错误。';
+    // 拦截器和store抛出的最终错误会在这里被捕获
+    errorMessage.value = error.message || '登录时发生未知错误。';
   } finally {
     isLoading.value = false;
   }
@@ -66,7 +63,8 @@ const handleLogin = async () => {
       </template>
       <el-form @submit.prevent="handleLogin" label-position="top">
         <el-form-item label="邮箱">
-          <el-input v-model="email" type="email" placeholder="请输入您的邮箱" size="large" />
+          <!-- v-model 绑定的是 username -->
+          <el-input v-model="username" type="email" placeholder="请输入您的邮箱" size="large" />
         </el-form-item>
         <el-form-item label="密码">
           <el-input v-model="password" type="password" placeholder="请输入您的密码" show-password size="large" />
@@ -89,7 +87,7 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
-/* Styles remain unchanged */
+/* 样式保持不变 */
 .auth-page { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #020617; }
 .auth-card { width: 400px; }
 .card-header { text-align: center; font-size: 1.5rem; font-weight: 600; }
