@@ -407,24 +407,26 @@ function renderCharts() {
   const titles: EChartsOption['title'] = [];
 
   const totalHeight = 100;
-  const topMargin = isPanelCollapsed.value ? 2 : 8;
-  const bottomMargin = indicatorCount > 0 ? 5 : 0;
-  const availableHeight = totalHeight - topMargin - bottomMargin;
+  const topMargin = isPanelCollapsed.value ? 4 : 6;
+  // 1. 减小固定的底部边距，释放更多可用空间
+  const bottomMargin = 4;
+  // 2. 定义一个更舒适的、固定的图表间隔
+  const gap = 4; // 每个图表之间的间隔为 4%
 
-  const klineWeight = 2.0;
+  const availableHeight = totalHeight - topMargin - bottomMargin;
+  const totalGapHeight = indicatorCount > 0 ? gap * indicatorCount : 0;
+  const contentHeight = availableHeight - totalGapHeight; // 计算所有图表能占用的总高度
+
+  const klineWeight = 2.0; // K线图的权重，让它比指标图更高
   const totalWeight = klineWeight + indicatorCount;
 
-  const klineHeight = (availableHeight * klineWeight) / totalWeight;
-  const indicatorHeight = indicatorCount > 0 ? (availableHeight * 1) / totalWeight : 0;
-
-  const gap = indicatorCount > 1 ? Math.min(2, availableHeight / (indicatorCount * 2)) : 0;
-  const totalGapHeight = gap * (indicatorCount);
-  const adjustedKlineHeight = klineHeight - (totalGapHeight * (klineWeight / totalWeight));
-  const adjustedIndicatorHeight = indicatorHeight - (totalGapHeight * (1 / totalWeight));
+  // 3. 根据剩余空间动态计算每个图表的高度
+  const adjustedKlineHeight = (contentHeight * klineWeight) / totalWeight;
+  const adjustedIndicatorHeight = indicatorCount > 0 ? (contentHeight * 1) / totalWeight : 0;
 
   let currentTop = topMargin;
 
-  grids.push({ top: `${currentTop}%`, height: `${adjustedKlineHeight}%`, left: '8%', right: '2%' });
+  grids.push({ top: `${currentTop}%`, height: `${adjustedKlineHeight}%`, left: '5%', right: '1%' });
   xAxes.push({
     type: 'category',
     data: dates,
@@ -453,7 +455,7 @@ function renderCharts() {
   if (!isPanelCollapsed.value) {
     titles.push({
       text: `MA5: ${ma5[ma5.length-1]?.toFixed(2)}  MA10: ${ma10[ma10.length-1]?.toFixed(2)}  MA20: ${ma20[ma20.length-1]?.toFixed(2)}`,
-      left: '8%',
+      left: '5%',
       top: `${currentTop}%`,
       textStyle: { color: '#ccc', fontSize: 12, fontWeight: 'normal' }
     });
@@ -466,7 +468,7 @@ function renderCharts() {
     gridIndexCounter++;
     const isLast = gridIndexCounter === activeIndicators.length;
 
-    grids.push({ top: `${currentTop}%`, height: `${adjustedIndicatorHeight}%`, left: '8%', right: '2%' });
+    grids.push({ top: `${currentTop}%`, height: `${adjustedIndicatorHeight}%`, left: '5%', right: '1%' });
     xAxes.push({
       type: 'category', data: dates, gridIndex: gridIndexCounter,
       axisLabel: { show: isLast, color: '#999' },
@@ -520,8 +522,7 @@ function renderCharts() {
         titles.push({
             text: titleText,
             left: '8%',
-            // ✨ FIX: Position title ABOVE the current grid
-            top: `${currentTop - adjustedIndicatorHeight - 1.5}%`,
+            top: `${currentTop}%`,
             textStyle: { color: '#ccc', fontSize: 12, fontWeight: 'normal' }
         });
     }

@@ -1,4 +1,4 @@
-<!-- 文件: LoginView.vue (最终修正完整版 V2.0) -->
+<!-- 文件: LoginView.vue  -->
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';

@@ -1,4 +1,4 @@
-// 文件: src/stores/user.ts (最终完整版)
+// 文件: src/stores/user.ts
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
@@ -6,12 +6,28 @@ import { login as loginApi, getMe as getMeApi } from '@/api/auth';
 import type { LoginFormData, UserInfo, LoginResponse } from '@/types/user';
 
 export const useUserStore = defineStore('user', () => {
+  // --- 状态 (State) ---
   const token = ref<string | null>(localStorage.getItem('user_token'));
-  const userInfo = ref<UserInfo | null>(JSON.parse(localStorage.getItem('userInfo') || 'null'));
 
+  const initializeUserInfo = (): UserInfo | null => {
+    const userInfoString = localStorage.getItem('userInfo');
+    if (userInfoString && userInfoString !== 'undefined' && userInfoString !== 'null') {
+      try {
+        return JSON.parse(userInfoString);
+      } catch (e) {
+        console.error("解析本地存储的userInfo失败:", e);
+        return null;
+      }
+    }
+    return null;
+  };
+  const userInfo = ref<UserInfo | null>(initializeUserInfo());
+
+  // --- 计算属性 (Getters) ---
   const isLoggedIn = computed(() => !!token.value && !!userInfo.value);
   const apiToken = computed(() => userInfo.value?.api_token);
 
+  // --- 核心动作 (Actions) ---
   function setStoreState(accessToken: string, newInfo: UserInfo) {
     token.value = accessToken;
     userInfo.value = newInfo;
@@ -47,33 +63,52 @@ export const useUserStore = defineStore('user', () => {
     window.location.reload();
   }
 
+  // 这个函数现在被 forceRefreshUserInfo 替代，但为了兼容性保留
   async function tryAutoLogin(): Promise<boolean> {
     if (token.value && !userInfo.value) {
-      try {
-        const response = await getMeApi();
-        if(response && response.data) {
-          userInfo.value = response.data;
-          localStorage.setItem('userInfo', JSON.stringify(response.data));
-          return true;
-        }
-        return false;
-      } catch (error) {
-        clearLoginInfo();
-        return false;
-      }
+      return await forceRefreshUserInfo();
     }
     return !!userInfo.value;
   }
 
-  function updateUserInfo(newUserInfo: UserInfo) {
+  // 新增的、更可靠的刷新函数
+  async function forceRefreshUserInfo(): Promise<boolean> {
+    if (token.value) {
+      try {
+        const response = await getMeApi();
+        if (response && response.data) {
+          userInfo.value = response.data;
+          localStorage.setItem('userInfo', JSON.stringify(response.data));
+          return true;
+        }
+      } catch (error) {
+        console.warn("刷新用户信息失败 (可能是token已过期):", error);
+        clearLoginInfo();
+      }
+    }
+    return false;
+  }
+
+  // updateUserInfo 函数保持不变
+  function updateUserInfo(newUserInfo: Partial<UserInfo>) {
       if (userInfo.value) {
-          const updated = { ...userInfo.value, ...newUserInfo };
+          const updated = { ...userInfo.value, ...newUserInfo } as UserInfo;
           userInfo.value = updated;
           localStorage.setItem('userInfo', JSON.stringify(updated));
       }
   }
 
+  // 返回所有函数和状态，确保不破坏任何现有依赖
   return {
-    token, userInfo, isLoggedIn, apiToken, login, logout, tryAutoLogin, updateUserInfo, clearLoginInfo
+    token,
+    userInfo,
+    isLoggedIn,
+    apiToken,
+    login,
+    logout,
+    tryAutoLogin, // 保留 tryAutoLogin
+    forceRefreshUserInfo,
+    updateUserInfo,
+    clearLoginInfo
   };
 });

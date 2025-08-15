@@ -1,10 +1,10 @@
-// 文件: src/api/request.ts (最终完整版)
+// 文件: src/api/request.ts
 
 import axios from 'axios';
 import type { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useUserStore } from '@/stores/user';
 import { ElMessage } from 'element-plus';
-import type { ApiResponse } from '@/types/api'; // 假设您有这个类型来定义 { code, msg, data }
+import type { ApiResponse } from '@/types/api';
 
 const service = axios.create({
   baseURL: '/api',
@@ -12,6 +12,7 @@ const service = axios.create({
   headers: { 'Content-Type': 'application/json;charset=utf-8' }
 });
 
+// 请求拦截器 (保持不变)
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const userStore = useUserStore();
@@ -25,6 +26,7 @@ service.interceptors.request.use(
   }
 );
 
+// 响应拦截器 (您的版本，是正确的)
 service.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data;
@@ -36,11 +38,11 @@ service.interceptors.response.use(
       }
       return Promise.reject(new Error(res.msg || 'Error'));
     } else {
-      // **核心：返回整个 res 对象 { code, msg, data }**
       return res;
     }
   },
   (error: AxiosError<ApiResponse>) => {
+    // ... 您的错误处理逻辑保持不变 ...
     let message = '请求失败';
     if (error.response) {
       const { status, data } = error.response;
@@ -64,4 +66,24 @@ service.interceptors.response.use(
   }
 );
 
-export default service;
+
+// 【【核心修正】】
+// 我们导出的不是原始的 service，而是一个类型化的包装器
+// 它明确告诉TypeScript，所有方法的返回值都是 Promise<ApiResponse<T>>
+const typedService = {
+  get<T = any>(url: string, config?: InternalAxiosRequestConfig): Promise<ApiResponse<T>> {
+    return service.get(url, config) as Promise<ApiResponse<T>>;
+  },
+  post<T = any>(url: string, data?: any, config?: InternalAxiosRequestConfig): Promise<ApiResponse<T>> {
+    return service.post(url, data, config) as Promise<ApiResponse<T>>;
+  },
+  put<T = any>(url: string, data?: any, config?: InternalAxiosRequestConfig): Promise<ApiResponse<T>> {
+    return service.put(url, data, config) as Promise<ApiResponse<T>>;
+  },
+  delete<T = any>(url: string, config?: InternalAxiosRequestConfig): Promise<ApiResponse<T>> {
+    return service.delete(url, config) as Promise<ApiResponse<T>>;
+  },
+};
+
+
+export default typedService;

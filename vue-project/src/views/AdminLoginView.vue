@@ -1,119 +1,124 @@
+<!-- 文件: src/views/AdminLoginView.vue (全新恢复版) -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useMonitorStore, type StockQuote } from '@/stores/monitorStore';
-import MonitorToolbar from '@/components/MonitorToolbar.vue';
-import MonitorTable from '@/components/MonitorTable.vue';
-import MonitorChart from '@/components/MonitorChart.vue';
-import SettingsModal from '@/components/SettingsModal.vue';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/user';
 import { ElMessage } from 'element-plus';
-import { Bell } from '@element-plus/icons-vue';
+import { User, Lock } from '@element-plus/icons-vue';
 
-const monitorStore = useMonitorStore();
-const {
-  isMonitoring, isLoading, lastUpdateTime,
-  stockListForTable, visibleTableColumns
-} = storeToRefs(monitorStore);
+const router = useRouter();
+const userStore = useUserStore();
 
-const { startMonitoring, stopMonitoring, removeAverageGroup } = monitorStore;
+// 登录表单的数据模型
+const loginForm = ref({
+  username: '', // 对应后端的 username 字段
+  password: '',
+});
+const errorMessage = ref('');
+const isLoading = ref(false);
 
-const chartRef = ref<InstanceType<typeof MonitorChart> | null>(null);
-const tableRef = ref<InstanceType<typeof MonitorTable> | null>(null);
-const isSettingsModalOpen = ref(false);
+const handleLogin = async () => {
+  if (!loginForm.value.username || !loginForm.value.password) {
+    errorMessage.value = '请输入管理员邮箱和密码。';
+    return;
+  }
+  errorMessage.value = '';
+  isLoading.value = true;
 
-const handleRowClick = (row: StockQuote) => {
-    if (row && row['股票代码'] && !row['股票代码'].startsWith('_AVG_')) {
-        chartRef.value?.focusOnStock(row['股票代码']);
+  try {
+    const success = await userStore.login(loginForm.value);
+
+    if (success) {
+      // 登录成功后，检查是否真的是管理员
+      if (userStore.userInfo?.is_superuser) {
+        ElMessage.success('管理员登录成功！');
+        await router.push({ name: 'super-manager' }); // 跳转到管理员主页
+      } else {
+        // 如果登录的账号不是管理员，则登出并提示错误
+        userStore.logout();
+        errorMessage.value = '该账户不是管理员账户。';
+        ElMessage.error('该账户不是管理员账户。');
+      }
     }
-};
-
-const handleExport = () => {
-    tableRef.value?.exportToExcel();
-    ElMessage.success("数据已导出为 Excel 文件。");
-};
-
-const handleAlertClick = (stock: any) => {
-    ElMessage.info(`为 ${stock['名称']} (${stock['股票代码']}) 设置告警的功能正在开发中...`);
+    // 如果 success 为 false, store 或拦截器已处理错误
+  } catch (error: any) {
+    // 捕获 store 或拦截器抛出的最终错误
+    errorMessage.value = error.message || '登录时发生未知错误。';
+  } finally {
+    isLoading.value = false;
+  }
 };
 </script>
 
 <template>
-  <div class="monitor-page-container">
-    <MonitorToolbar
-      :is-loading="isLoading"
-      :is-monitoring="isMonitoring"
-      :last-update-time="lastUpdateTime"
-      @open-settings="isSettingsModalOpen = true"
-      @start-monitoring="startMonitoring"
-      @stop-monitoring="stopMonitoring"
-      @open-avg-calculator="isSettingsModalOpen = true"
-      @export-excel="handleExport"
-    />
-
-    <div class="table-wrapper">
-        <el-table :data="stockListForTable" stripe border height="100%" v-loading="isLoading" row-key="股票代码" @row-click="handleRowClick">
-          <el-table-column
-            v-for="column in visibleTableColumns"
-            :key="column.field"
-            :prop="column.field"
-            :label="column.title"
-            :fixed="column.field === '名称' ? 'left' : undefined"
-            min-width="150"
+  <div class="admin-login-page">
+    <el-card class="login-card" shadow="always">
+      <template #header>
+        <div class="card-header">
+          <span>管理员登录</span>
+        </div>
+      </template>
+      <el-form @submit.prevent="handleLogin" :model="loginForm" label-position="top">
+        <el-form-item label="管理员邮箱">
+          <el-input
+            v-model="loginForm.username"
+            type="email"
+            placeholder="请输入管理员邮箱"
+            size="large"
+            :prefix-icon="User"
+          />
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input
+            v-model="loginForm.password"
+            type="password"
+            placeholder="请输入密码"
+            show-password
+            size="large"
+            :prefix-icon="Lock"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            native-type="submit"
+            :loading="isLoading"
+            size="large"
+            style="width: 100%;"
           >
-            <template #default="{ row }">
-              <span v-if="row['股票代码']?.startsWith('_AVG_') && column.field === '名称'">
-                  <el-popconfirm title="确定删除这个分组吗?" @confirm="removeAverageGroup(row['股票代码'])">
-                      <template #reference><el-button type="danger" link>✖</el-button></template>
-                  </el-popconfirm>
-                  {{ row[column.field] }}
-              </span>
-              <span v-else-if="['最新价', '涨跌幅(%)', '涨跌额'].includes(column.field)"
-                    :class="row['涨跌幅(%)'] > 0 ? 'color-red' : row['涨跌幅(%)'] < 0 ? 'color-green' : ''">
-                {{ typeof row[column.field] === 'number' ? row[column.field].toFixed(2) : '--' }}{{ column.suffix || (column.field.includes('%') ? '%' : '') }}
-              </span>
-              <span v-else>
-                  {{ typeof row[column.field] === 'number' ? row[column.field].toFixed(2) : (row[column.field] || '--') }}{{ column.suffix || '' }}
-              </span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="操作" width="80" fixed="right">
-            <template #default="{ row }">
-              <el-tooltip v-if="!row['股票代码']?.startsWith('_AVG_')" content="设置告警">
-                  <el-button :icon="Bell" @click.stop="handleAlertClick(row)" circle />
-              </el-tooltip>
-            </template>
-          </el-table-column>
-        </el-table>
+            登 录
+          </el-button>
+        </el-form-item>
+      </el-form>
+      <div v-if="errorMessage" class="error-message">
+        <el-alert :title="errorMessage" type="error" show-icon :closable="false" />
       </div>
-
-    <SettingsModal v-model:modelValue="isSettingsModalOpen" />
+    </el-card>
   </div>
 </template>
 
 <style scoped>
-.monitor-page-container { width: 100%; height: 100%; display: flex; flex-direction: column; }
-.content-wrapper { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
-.chart-container { height: 45%; flex-shrink: 0; padding: 0.5rem; background-color: #0f172a; }
-.table-container { flex-grow: 1; min-height: 0; }
-.color-red { color: #ef4444 !important; font-weight: 500; }
-.color-green { color: #22c55e !important; font-weight: 500; }
-:deep(.avg-row-cell) {
-    background-color: #3730a3 !important;
-    font-weight: bold;
-    color: #e0e7ff !important;
+.admin-login-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #020617;
+  background-image: radial-gradient(circle at center, #1e293b 0%, #020617 70%);
 }
-:deep(.delete-avg-btn) {
-    background: none;
-    border: none;
-    color: #f87171;
-    cursor: pointer;
-    margin-right: 8px;
-    font-size: 1.2em;
-    padding: 0;
-    line-height: 1;
+.login-card {
+  width: 400px;
+  background-color: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(10px);
 }
-:deep(.delete-avg-btn:hover) {
-    color: #ef4444;
+.card-header {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+.error-message {
+  margin-top: 1rem;
 }
 </style>

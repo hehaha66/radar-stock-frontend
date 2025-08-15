@@ -1,8 +1,11 @@
+<!-- 文件: src/views/SuperManagerView.vue (最终完整版) -->
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import service from '@/api'
+// 【修正】service 导入路径
+import service from '@/api/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UserInfo } from '@/stores/user'
+// 【修正】UserInfo 类型导入路径
+import type { UserInfo } from '@/types/user'
 import { ArrowDown } from '@element-plus/icons-vue'
 
 // --- 状态变量 ---
@@ -14,7 +17,6 @@ const dialogVisible = ref(false)
 const dialogMode = ref<'authorize'>('authorize')
 const currentEditingUser = ref<UserInfo | null>(null)
 
-// --- 弹窗表单数据 (修正 plan 默认值) ---
 const form = ref({
   plan: 'pro',
   duration: 'monthly',
@@ -33,22 +35,24 @@ const filteredUsers = computed(() => {
   )
 })
 
-// --- API 调用函数 ---
+// --- API 调用函数 (已与最新的 request.ts 匹配) ---
 const fetchUsers = async () => {
   loading.value = true
   try {
-    const { data: responseData } = await service.get('/admin/users')
+    // service.get 现在返回 { code, msg, data }
+    const response = await service.get('/admin/users')
+    const responseData = response.data // responseData 是 { users, total }
+
     if (responseData && Array.isArray(responseData.users)) {
-      // 过滤掉管理员自己
-      userList.value = responseData.users.filter((u: UserInfo) => u.role !== 'admin');
-      totalUsers.value = responseData.total - 1; // 减去管理员
+      // 使用 is_superuser 过滤管理员
+      userList.value = responseData.users.filter((u: UserInfo) => !u.is_superuser);
+      totalUsers.value = userList.value.length;
     } else {
-      console.error("获取的用户数据格式不正确:", responseData)
       userList.value = []
       totalUsers.value = 0
     }
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.detail || '获取用户列表失败')
+  } catch (error) {
+    // 错误消息已由拦截器处理
   } finally {
     loading.value = false
   }
@@ -57,7 +61,8 @@ const fetchUsers = async () => {
 const handleAuthorize = async () => {
   if (!currentEditingUser.value) return
   try {
-    const { data: updatedUser } = await service.post(
+    // service.post 现在返回 { code, msg, data }
+    const response = await service.post(
       `/admin/users/${currentEditingUser.value.id}/authorize`,
       {
         email: currentEditingUser.value.email,
@@ -65,25 +70,26 @@ const handleAuthorize = async () => {
         duration: form.value.duration
       }
     )
-    updateUserInList(updatedUser)
-    ElMessage.success('授权成功！')
+    updateUserInList(response.data)
+    ElMessage.success(response.msg || '授权成功！')
     dialogVisible.value = false
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.detail || '授权失败')
+  } catch (error) {
+    // 拦截器已处理
   }
 }
 
 const toggleUserStatus = async (user: UserInfo) => {
     try {
         const newStatus = !user.is_active;
-        const { data: updatedUser } = await service.put(
+        // service.put 现在返回 { code, msg, data }
+        const response = await service.put(
             `/admin/users/${user.id}/status`,
             { is_active: newStatus }
         );
-        updateUserInList(updatedUser);
-        ElMessage.success(`用户状态已更新为: ${newStatus ? '激活' : '封禁'}`);
-    } catch (error: any) {
-        ElMessage.error(error.response?.data?.detail || '状态更新失败');
+        updateUserInList(response.data);
+        ElMessage.success(response.msg || `用户状态已更新为: ${newStatus ? '激活' : '封禁'}`);
+    } catch (error) {
+        // 拦截器已处理
     }
 }
 
@@ -95,11 +101,12 @@ const confirmDeleteUser = (user: UserInfo) => {
         inputErrorMessage: '输入的邮箱不匹配',
     }).then(async () => {
         try {
-            await service.delete(`/admin/users/${user.id}`);
+            // service.delete 现在返回 { code, msg, data }
+            const response = await service.delete(`/admin/users/${user.id}`);
             userList.value = userList.value.filter(u => u.id !== user.id);
-            ElMessage.success(`用户 ${user.email} 已被删除。`);
-        } catch (error: any) {
-            ElMessage.error(error.response?.data?.detail || '删除用户失败');
+            ElMessage.success(response.msg || `用户 ${user.email} 已被删除。`);
+        } catch (error) {
+            // 拦截器已处理
         }
     }).catch(() => {
         ElMessage.info('已取消删除操作');
@@ -111,7 +118,6 @@ const confirmDeleteUser = (user: UserInfo) => {
 const openDialog = (mode: 'authorize', user: UserInfo) => {
   dialogMode.value = mode
   currentEditingUser.value = user
-  // **修正：默认 plan 改为 "pro"**
   form.value = {
     plan: 'pro',
     duration: 'monthly',
@@ -126,7 +132,7 @@ const updateUserInList = (updatedUser: UserInfo) => {
     }
 }
 
-const formatDate = (dateString: string | null) => {
+const formatDate = (dateString?: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString('zh-CN', {
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -187,7 +193,6 @@ onMounted(() => {
             <el-form v-if="dialogMode === 'authorize'" :model="form" label-width="80px">
                 <el-form-item label="选择套餐">
                     <el-select v-model="form.plan" placeholder="请选择套餐">
-                        <!-- **核心修正：value 改为 "pro" 和 "master"** -->
                         <el-option label="专业版 (Pro)" value="pro"></el-option>
                         <el-option label="大师版 (Master)" value="master"></el-option>
                     </el-select>

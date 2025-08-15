@@ -24,7 +24,7 @@ function navigateTo(path: string) {
           <div class="radar-grid radar-grid-2"></div>
           <div class="radar-grid radar-grid-3"></div>
         </div>
-        
+
         <div class="hero-text">
           <h1 class="slogan">洞悉毫秒间的市场脉搏</h1>
           <p class="description">
@@ -32,7 +32,7 @@ function navigateTo(path: string) {
           </p>
         </div>
       </div>
-      
+
       <div class="features-wrapper">
         <div class="feature-module" @click="navigateTo('/monitor')">
           <div class="module-icon">
@@ -52,7 +52,7 @@ function navigateTo(path: string) {
             <p>用历史数据验证策略</p>
           </div>
         </div>
-        <div class="feature-module" @click="navigateTo('/api-docs')">
+        <div class="feature-module" @click="navigateTo('/docs')">
           <div class="module-icon">
             <svg viewBox="0 0 24 24"><path d="M4,6H2V20A2,2 0 0,0 4,22H18V20H4V6M20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M20,16H8V4H20" /></svg>
           </div>

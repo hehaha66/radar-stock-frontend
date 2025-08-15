@@ -43,10 +43,15 @@
                       <el-icon><User /></el-icon>
                       个人资料
                     </el-dropdown-item>
-                    <el-dropdown-item v-if="userStore.userInfo?.role === 'admin'" command="admin" divided>
+
+                    <!-- 【【核心修正点】】 -->
+                    <!-- 将 v-if 的判断条件从检查一个不存在的 `role` 字段， -->
+                    <!-- 改为检查一个正确的、从后端获取的 `is_superuser` 布尔值。 -->
+                    <el-dropdown-item v-if="userStore.userInfo?.is_superuser" command="admin" divided>
                       <el-icon><Setting /></el-icon>
                       管理界面
                     </el-dropdown-item>
+
                     <el-dropdown-item divided command="logout">
                       <el-icon><SwitchButton /></el-icon>
                       退出登录
